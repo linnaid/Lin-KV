@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package mvcc;
+
+option go_package = "etcd-KV/internal/pb/mvcc";
+
+message Snapshot {
+    int64 current_rev = 1;
+    repeated KeyEntry entries = 2;
+}
+
+message KeyEntry {
+    string key = 1;
+    repeated ValueRevision revisions = 2;
+}
+
+message ValueRevision {
+    Revision rev = 1;
+    bytes value = 2;
+    bool deleted = 3;
+}
+
+message Revision {
+    int64 main = 1;
+    int64 sub = 2;
+}

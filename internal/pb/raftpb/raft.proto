@@ -1,0 +1,29 @@
+// raft 的序列化/反序列化操作
+syntax = "proto3";
+
+package raftpb;
+
+option go_package = "etcd-KV/internal/pb/raftpb";
+
+message Snapshot {
+    int64 lastIncludeIndex = 1; // 下标
+    int64 lastIncludeTerm = 2; // 快照中最后一条日志的任期
+}
+
+message LogEntry {
+    int64 Term = 1; // 任期
+    bytes Command = 2; // 命令内容
+    int64 Index = 3; // 下标
+}
+
+// 核心状态
+message HardState {
+    int64 Term = 1;
+    int64 VotedFor = 2;
+}
+
+message RaftState {
+    Snapshot snapshot = 1;
+    repeated LogEntry log = 2;
+    HardState hardstate = 3;
+}
