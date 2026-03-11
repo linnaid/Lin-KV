@@ -1,9 +1,12 @@
 package mvcc
 
 import (
+	"errors"
 	"sync"
 	"time"
 )
+
+var ErrCompacted = errors.New("压缩失败，它已被压缩")
 
 
 type EventType uint8
@@ -20,9 +23,12 @@ type KVStore struct {
 
 	currentRev int64
 	compactRev int64
-	lastCompactTime *time.Timer
+	lastCompactTime *time.Ticker
 
 	events []Event
+	watchers map[string][]*Watcher
+	watchersByID map[int64]*Watcher
+	nextWatcherID int64
 }
 
 type Event struct {
@@ -32,11 +38,17 @@ type Event struct {
 	Rev Revision
 }
 
+type Watcher struct {
+	ID int64
+	Key string
+	StartRev int64
+	Ch chan Event
+}
 
 type kvSnapshot struct {
 	CurrentRev int64
 	CompactRev int64
-	
+
 	Data map[string][]ValueRevision
 	Events []Event
 }
