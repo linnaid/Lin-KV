@@ -1,11 +1,9 @@
 package mvcc
 
 import (
-	"errors"
 	"etcd-KV/Tools"
 )
 
-var ErrCompacted = errors.New("压缩失败，它已被压缩")
 
 // 1
 func (s *KVStore) Compact(rev int64) error {
