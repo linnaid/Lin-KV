@@ -11,6 +11,9 @@ import (
 func NewKVStore() *KVStore {
 	kv := &KVStore{
 		data: make(map[string][]ValueRevision),
+		events: make([]Event, 0, 1024),
+		watchers: make(map[string][]*Watcher),
+		watchersByID: make(map[int64]*Watcher),
 	}
 
 	return kv
