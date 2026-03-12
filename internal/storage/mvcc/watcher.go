@@ -1,5 +1,7 @@
 package mvcc
 
+import "etcd-KV/Tools"
+
 // 2
 
 // func (s *KVStore) Watcsh(key string, fromRev int64) []Event {
@@ -19,15 +21,21 @@ package mvcc
 func (s *KVStore) Watch(key string, fromRev int64) (<-chan Event, int64) {
 	s.mu.Lock()
 
+	if fromRev <= s.compactRev {
+		s.mu.Unlock()
+		Tools.Error("请求的是已被压缩的版本", fromRev, s.compactRev)
+		return nil, -1
+	}
+	
 	id := s.nextWatcherID
 	s.nextWatcherID++
 
 	ch := make(chan Event, 16)
 
-	events := make([]Event, len(s.events))
+	backlog := make([]Event, 0, len(s.events))
 	for _, e := range s.events {
 		if e.Key == key && e.Rev.Main >= fromRev {
-			events = append(events, e)
+			backlog = append(backlog, e)
 		}
 	}
 
@@ -42,12 +50,11 @@ func (s *KVStore) Watch(key string, fromRev int64) (<-chan Event, int64) {
 	s.watchersByID[id] = w
 
 	s.mu.Unlock()
-	for _, e := range events {
-		select {
-		case ch<-e:
-		default:
+	go func() {
+		for _, e := range backlog {
+			ch<-e
 		}
-	}
+	}()
 
 	return ch, id
 }
@@ -69,3 +76,4 @@ func (s *KVStore) notifyWacthers(ev Event) {
 	}
 
 }
+
