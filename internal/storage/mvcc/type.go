@@ -59,6 +59,12 @@ type ValueRevision struct {
 	Deleted bool
 }
 
+type KeyValue struct {
+	Key string
+	Value []byte
+	Rev Revision
+}
+
 type KV interface {
 	Put(k string, v []byte)
 	Get(k string) ([]byte, bool)
