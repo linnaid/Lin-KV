@@ -65,6 +65,41 @@ type KeyValue struct {
 	Rev Revision
 }
 
+// Txn
+type Compare struct {
+	Key string
+	Op CompareOp
+	Rev int64
+}
+
+type CompareOp int
+
+const (
+	CompareEqual CompareOp = iota
+	CompareGreater
+	CompareLess
+)
+
+type Operation struct {
+	Type OpType
+	Key string
+	Value []byte
+}
+
+type OpType int
+
+const (
+	OpGet OpType = iota
+	OpPut
+	OpDelete
+)
+
+type Txn struct {
+	Compares []Compare
+	ThenOps []Operation
+	ElseOps []Operation
+}
+
 type KV interface {
 	Put(k string, v []byte)
 	Get(k string) ([]byte, bool)
