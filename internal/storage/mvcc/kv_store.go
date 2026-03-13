@@ -325,15 +325,65 @@ func (s *KVStore) Snapshot() []byte {
 	return data
 }
 
-func (s *KVStore) Range(start , end string, rev int64) map[string][]byte {
-	result := make(map[string][]byte, len(s.data))
-	for k, _ := range s.data {
-		if k >= start && k < end {
-			v, ok := s.Get(k, rev)
-			if ok {
-				result[k] = v
+// func (s *KVStore) Range(start , end string, rev int64) map[string][]byte {
+// 	result := make(map[string][]byte, len(s.data))
+// 	for k, _ := range s.data {
+// 		if k >= start && k < end {
+// 			v, ok := s.Get(k, rev)
+// 			if ok {
+// 				result[k] = v
+// 			}
+// 		}
+// 	}
+// 	return result
+// }
+
+func (s *KVStore) Range(startKey, endKey string, rev int64) []KeyValue {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if rev == 0 {
+		rev = s.currentRev
+	}
+	if rev <= s.compactRev {
+		return nil
+	}
+
+	result := make([]KeyValue, 0, len(s.data))
+
+	for key, v := range s.data {
+		if key >= startKey && key < endKey {
+			n := len(v)
+			for i := n - 1; i >= 0; i-- {
+				if v[i].Rev.Main <= rev {
+					if v[i].Deleted {
+						break
+					}
+
+					val := make([]byte, len(v[i].Value))
+					copy(val, v[i].Value)
+
+					result = append(result, KeyValue{
+						Key: key,
+						Value: val,
+						Rev: v[i].Rev,
+					})
+					break
+				}
 			}
 		}
 	}
+
+	sort.Slice(result, func (i, j int) bool {
+		return result[i].Key < result[j].Key
+	})
+
 	return result
+}
+
+func (s *KVStore) Txn(txn Txn) []KeyValue {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	
 }
