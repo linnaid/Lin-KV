@@ -29,6 +29,9 @@ type KVStore struct {
 	watchers map[string][]*Watcher
 	watchersByID map[int64]*Watcher
 	nextWatcherID int64
+
+	leaseMgr *LeaseManager
+	keyLease map[string]int64
 }
 
 type Event struct {
@@ -98,6 +101,21 @@ type Txn struct {
 	Compares []Compare
 	ThenOps []Operation
 	ElseOps []Operation
+}
+
+// Lease
+type Lease struct {
+	ID int64
+	TTL int64
+	ExpireAt time.Time
+	Keys map[string]struct{}
+}
+
+type LeaseManager struct {
+	mu sync.Mutex
+	leases map[int64]*Lease
+	kv *KVStore
+	nextLeaseID int64
 }
 
 type KV interface {
