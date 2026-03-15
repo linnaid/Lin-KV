@@ -11,20 +11,31 @@ import (
 func NewKVStore() *KVStore {
 	kv := &KVStore{
 		data: make(map[string][]ValueRevision),
+
 		events: make([]Event, 0, 1024),
+
 		watchers: make(map[string][]*Watcher),
 		watchersByID: make(map[int64]*Watcher),
+
+		keyLease: make(map[string]int64),
 	}
+
+	leaseMgr := NewLeaseManager(kv)
+
+	kv.leaseMgr = leaseMgr
+
+	// 开始循环leaseMgr，自动过期清理
+	go leaseMgr.expirationLoop()
 
 	return kv
 }
 
 // 覆盖写，不区分是否存在
-func (s *KVStore) Put(k string, v []byte) Revision{
+func (s *KVStore) Put(k string, v []byte, leaseID int64) Revision{
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	s.currentRev++
+
 	rev := Revision{
 		Main: s.currentRev,
 		Sub: 0,
@@ -48,6 +59,20 @@ func (s *KVStore) Put(k string, v []byte) Revision{
 		Key: k,
 		Value: e_val,
 		Rev: rev,
+	})
+
+	s.mu.Unlock()
+
+	// attach lease
+	if leaseID != 0 {
+		s.leaseMgr.AttachKey(k, leaseID)
+	}
+
+	s.notifyWacthers(Event{
+		Type: EventPut,
+		Key: k,
+		Rev: rev,
+		Value: value,
 	})
 
 	return rev
@@ -155,6 +180,8 @@ func (s *KVStore) Delete(k string) Revision{
 		Rev: rev,
 		Value: nil,
 	})
+
+	delete(s.keyLease, k)
 
 	return rev
 }
