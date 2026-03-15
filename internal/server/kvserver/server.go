@@ -26,6 +26,7 @@ type Server struct {
 	id int
 	raft *raft.Raft
 	kv *mvcc.KVStore
+	leaseMgr *mvcc.LeaseManager
 
 	applyCh chan raft.ApplyMsg  // 全局状态机推进流
 
@@ -46,10 +47,13 @@ func NewServer(
 	kv *mvcc.KVStore, 
 	applyCh chan raft.ApplyMsg) *Server {
 
+		leaseMgr := mvcc.NewLeaseManager(kv)
+
 		s := &Server{
 			id: id,
 			raft: raft,
 			kv: kv,
+			leaseMgr: leaseMgr,
 			applyCh: applyCh,
 			waitCh: make(map[int]*waitEntry),
 
