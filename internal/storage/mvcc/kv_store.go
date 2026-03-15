@@ -380,10 +380,3 @@ func (s *KVStore) Range(startKey, endKey string, rev int64) []KeyValue {
 
 	return result
 }
-
-func (s *KVStore) Txn(txn Txn) []KeyValue {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	
-}
