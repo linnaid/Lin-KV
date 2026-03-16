@@ -3,59 +3,29 @@ package kvserver
 
 import (
 	"context"
-	"errors"
 	"etcd-KV/Tools"
 	"etcd-KV/internal/api/kv"
 	"etcd-KV/internal/command"
 	"etcd-KV/internal/raft"
 	"etcd-KV/internal/storage/mvcc"
-	"sync"
 	"time"
 )
-
-type waitEntry struct {
-	Notify chan struct{}
-	ClientID int64
-	Seq int64
-
-	Value []byte
-	Err error
-}
-
-type Server struct {
-	id int
-	raft *raft.Raft
-	kv *mvcc.KVStore
-	leaseMgr *mvcc.LeaseManager
-
-	applyCh chan raft.ApplyMsg  // 全局状态机推进流
-
-	mu sync.Mutex
-	waitCh map[int]*waitEntry // 某一个 Raft log Index 的完成通知
-
-	// 客户端去重
-	clientLastSeq map[int64]int64  // 最后一次执行请求的Seq
-	clientLastValue map[int64][]byte  // 最后一次执行请求的返回值
-}
-
-var ErrNotLeader = errors.New("Is not Leader.")
-var ErrTimeout = errors.New("Is TimeOut.")
 
 func NewServer(
 	id int, 
 	raft *raft.Raft, 
-	kv *mvcc.KVStore, 
+	store *mvcc.KVStore, 
 	applyCh chan raft.ApplyMsg) *Server {
 
-		leaseMgr := mvcc.NewLeaseManager(kv)
+		leaseMgr := mvcc.NewLeaseManager(store)
 
 		s := &Server{
 			id: id,
 			raft: raft,
-			kv: kv,
+			store: store,
 			leaseMgr: leaseMgr,
 			applyCh: applyCh,
-			waitCh: make(map[int]*waitEntry),
+			waitCh: make(map[int64]*waitEntry),
 
 			clientLastSeq: make(map[int64]int64),
 			clientLastValue: make(map[int64][]byte),
@@ -80,12 +50,12 @@ func (s *Server)  Put(
 	req *kv.PutRequest, 
 	) (*kv.PutResponse, error) {
 		res := &kv.PutResponse{}
-		s.mu.Lock()
-		if req.Seq <= s.clientLastSeq[req.ClientID] {
-			s.mu.Unlock()
-			return res, nil
-		}
-		s.mu.Unlock()
+		// s.mu.Lock()
+		// if req.Seq <= s.clientLastSeq[req.ClientID] {
+		// 	s.mu.Unlock()
+		// 	return res, nil
+		// }
+		// s.mu.Unlock()
 
 		// 构造 Command
 		cmd := command.KVCommand{
@@ -100,6 +70,7 @@ func (s *Server)  Put(
 		ch := &waitEntry{
 			Notify: make(chan struct{}),
 			ClientID: req.ClientID,
+			Seq: req.Seq,
 		}
 
 		data, err := command.Encode(&cmd)
@@ -109,12 +80,14 @@ func (s *Server)  Put(
 		}
 
 		// 提交到Raft
-		index, _, isLeader := s.raft.Start(data)
+		index_raft, _, isLeader := s.raft.Start(data)
 		if !isLeader {
 			Tools.Debug("123")
 			res.Err = ErrNotLeader.Error()
 			return res, ErrNotLeader
 		}
+
+		index := change(index_raft)
 
 		s.mu.Lock()
 		s.waitCh[index] = ch
@@ -133,6 +106,9 @@ func (s *Server)  Put(
 				res.Err = ch.Err.Error()
 				return res, ch.Err
 			}
+			if ch.Rev != nil {
+				res.Revision = ch.Rev.Main
+			}
 			return res,nil
 		case <-ctx.Done():
 			s.mu.Lock()
@@ -140,7 +116,7 @@ func (s *Server)  Put(
 			s.mu.Unlock()
 			res.Err = ctx.Err().Error()
 			return res, ctx.Err()
-		case <-time.After(500 * time.Millisecond):
+		case <-time.After(2 * time.Second):
 			s.mu.Lock()
 			delete(s.waitCh, index)
 			s.mu.Unlock()
@@ -152,6 +128,11 @@ func (s *Server)  Put(
 func (s *Server) Get(ctx context.Context, 
 	req *kv.GetRequest,
 	) (*kv.GetResponse, error) {
+
+		if _, ok := s.raft.GetState(); !ok {
+			return nil, ErrNotLeader
+		}
+
 		reply := &kv.GetResponse{}
 		index, ok := s.raft.ReadIndex()
 		if !ok {
@@ -175,7 +156,7 @@ func (s *Server) Get(ctx context.Context,
 		}
 
 		s.mu.Lock()
-		value, ok := s.kv.Get(string(req.Key))
+		value, rev, ok := s.store.Get(string(req.Key), req.Revision)
 		s.mu.Unlock()
 
 		if !ok {
@@ -184,18 +165,19 @@ func (s *Server) Get(ctx context.Context,
 
 		return &kv.GetResponse{
 			Value: value,
+			Revision: rev,
 		}, nil
 	}
 
 func (s *Server) Delete(ctx context.Context, 
 	req *kv.DeleteRequest, 
 	) (*kv.DeleteResponse, error) {
-		s.mu.Lock()
-		if req.Seq <= s.clientLastSeq[req.ClientID] {
-			s.mu.Unlock()
-			return &kv.DeleteResponse{}, nil
-		}
-		s.mu.Unlock()
+		// s.mu.Lock()
+		// if req.Seq <= s.clientLastSeq[req.ClientID] {
+		// 	s.mu.Unlock()
+		// 	return &kv.DeleteResponse{}, nil
+		// }
+		// s.mu.Unlock()
 
 		cmd := &command.KVCommand{
 			Type: command.CmdDelete,
@@ -215,10 +197,12 @@ func (s *Server) Delete(ctx context.Context,
 			return nil, err
 		}
 
-		index, _, ok := s.raft.Start(data)
+		index_raft, _, ok := s.raft.Start(data)
 		if !ok {
 			return nil, ErrNotLeader
 		}
+
+		index := change(index_raft)
 
 		s.mu.Lock()
 		s.waitCh[index] = ch
@@ -235,13 +219,18 @@ func (s *Server) Delete(ctx context.Context,
 			if ch.Err != nil {
 				return nil, ch.Err
 			}
-			return &kv.DeleteResponse{}, nil
+			res := &kv.DeleteResponse{}
+			if ch.Rev != nil {
+				res.Revision = ch.Rev.Main
+				res.Deleted = true
+			}
+			return res, nil
 		case<-ctx.Done():
 			s.mu.Lock()
 			delete(s.waitCh, index)
 			s.mu.Unlock()
 			return nil, ctx.Err()
-		case <-time.After(500 * time.Millisecond):
+		case <-time.After(2 * time.Second):
 			s.mu.Lock()
 			delete(s.waitCh, index)
 			s.mu.Unlock()

@@ -4,6 +4,7 @@ package kvserver
 import (
 	"etcd-KV/Tools"
 	"etcd-KV/internal/command"
+	"etcd-KV/internal/storage/mvcc"
 )
 
 func (s *Server) applyLoop() {
@@ -11,7 +12,7 @@ func (s *Server) applyLoop() {
 		// Tools.Debug("111")
 		if msg.SnapshotValid {
 			s.mu.Lock()
-			s.kv.Restore(msg.Snapshot)
+			s.store.Restore(msg.Snapshot)
 			// TODO: restore clientLastSeq + clientLastValue
 			s.mu.Unlock()
 			continue
@@ -31,7 +32,9 @@ func (s *Server) applyLoop() {
 		s.mu.Lock()
 		if cmd.Seq <= s.clientLastSeq[cmd.ClientID] {
 
-			if ch, ok := s.waitCh[msg.CommandIndex]; ok {
+			commandIndex := change(msg.CommandIndex)
+
+			if ch, ok := s.waitCh[commandIndex]; ok {
 
 				if cmd.Type == command.CmdGet {
 					ch.Value = s.clientLastValue[cmd.ClientID] 
@@ -39,7 +42,7 @@ func (s *Server) applyLoop() {
 
 				ch.Err = nil
 				close(ch.Notify)
-				delete(s.waitCh, msg.CommandIndex)
+				delete(s.waitCh, commandIndex)
 			}
 
 			s.mu.Unlock()
@@ -52,24 +55,26 @@ func (s *Server) applyLoop() {
 		var ok_value bool
 		ok_get := false
 		
+		var rev mvcc.Revision
+
 		switch cmd.Type {
 		case command.CmdPut:
 			Tools.Debug("put", cmd.Key, cmd.Value)
-			s.kv.Put(cmd.Key, cmd.Value)
+			rev = s.store.Put(cmd.Key, cmd.Value)
 
 		case command.CmdDelete:
-			s.kv.Delete(cmd.Key)
+			rev = s.store.Delete(cmd.Key)
 
 		case command.CmdGet:
 			ok_get = true
-			value, ok_value = s.kv.Get(cmd.Key, cmd.Rev)
+			value, _, ok_value = s.store.Get(cmd.Key, cmd.Rev)
 			if !ok_value {
 				value = nil
 			}
 		}
 		
 		s.mu.Lock()
-		index := msg.CommandIndex
+		index := change(msg.CommandIndex)
 		s.clientLastSeq[cmd.ClientID] = cmd.Seq
 		Tools.Info("lastClientID", cmd.ClientID)
 		if ch, ok := s.waitCh[index]; ok {
@@ -80,6 +85,8 @@ func (s *Server) applyLoop() {
 				if ok_get {
 					ch.Value = value
 					s.clientLastValue[cmd.ClientID] = value
+				} else {
+					ch.Rev = &rev
 				}
 				
 				ch.Err = nil
