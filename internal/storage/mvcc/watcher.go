@@ -1,6 +1,9 @@
 package mvcc
 
-import "etcd-KV/Tools"
+import (
+	"etcd-KV/Tools"
+	"strings"
+)
 
 // 2
 
@@ -18,13 +21,13 @@ import "etcd-KV/Tools"
 // 	return result
 // }
 
-func (s *KVStore) Watch(key string, fromRev int64) (<-chan Event, int64) {
+func (s *KVStore) Watch(key string, fromRev int64, prefix bool) (<-chan Event, int64, error) {
 	s.mu.Lock()
 
 	if fromRev <= s.compactRev {
 		s.mu.Unlock()
 		Tools.Error("请求的是已被压缩的版本", fromRev, s.compactRev)
-		return nil, -1
+		return nil, -1, ErrCompacted
 	}
 	
 	id := s.nextWatcherID
@@ -34,8 +37,14 @@ func (s *KVStore) Watch(key string, fromRev int64) (<-chan Event, int64) {
 
 	backlog := make([]Event, 0, len(s.events))
 	for _, e := range s.events {
-		if e.Key == key && e.Rev.Main >= fromRev {
-			backlog = append(backlog, e)
+		if prefix {
+			if strings.HasPrefix(e.Key, key) && e.Rev.Main >= fromRev {
+				backlog = append(backlog, e)
+			}
+		} else {
+			if e.Key == key && e.Rev.Main >= fromRev {
+				backlog = append(backlog, e)
+			}
 		}
 	}
 
@@ -43,37 +52,130 @@ func (s *KVStore) Watch(key string, fromRev int64) (<-chan Event, int64) {
 		ID: id,
 		Key: key,
 		StartRev: fromRev,
+		Prefix: prefix,
 		Ch: ch,
 	}
 
-	s.watchers[key] = append(s.watchers[key], w)
+	if prefix {
+		s.prefixWatchers[key] = append(s.prefixWatchers[key], w)
+	} else {
+		s.watchers[key] = append(s.watchers[key], w)
+	}
+	
 	s.watchersByID[id] = w
 
 	s.mu.Unlock()
 	go func() {
 		for _, e := range backlog {
-			ch<-e
+
+			select {
+			case ch<-e:
+			default:
+			}
 		}
 	}()
 
-	return ch, id
+	return ch, id, nil
 }
 
-func (s *KVStore) notifyWacthers(ev Event) {
-	s.mu.RLock()
-	watchers := append([]*Watcher(nil), s.watchers[ev.Key]...)
-	s.mu.RUnlock()
+func (s *KVStore) dispatcherLoop() {
 
-	for _, w := range watchers {
-		if ev.Rev.Main < w.StartRev {
-			continue
+	for {
+		ev, ok := <-s.eventCh
+		if !ok {
+			Tools.Debug("dispatcherLoop not found eventCh")
+			return
 		}
 
-		select {
-		case w.Ch<-ev:
-		default:
+		s.mu.RLock()
+		watchers := append([]*Watcher(nil), s.watchers[ev.Key]...)
+		s.mu.RUnlock()
+
+		for _, w := range watchers {
+			if ev.Rev.Main < w.StartRev {
+				continue
+			}
+
+			select {
+			case w.Ch<-ev:
+			default:
+			}
+		}
+
+		s.mu.RLock()
+		prefixWatchers := make(map[string][]*Watcher, len(s.prefixWatchers))
+
+		for k, v := range s.prefixWatchers {
+			prefixWatchers[k] = append([]*Watcher(nil), v...)
+		}
+		s.mu.RUnlock()
+
+		for prefix, ws := range prefixWatchers {
+
+			if strings.HasPrefix(ev.Key, prefix) {
+				for _, w := range ws {
+
+					if ev.Rev.Main < w.StartRev {
+						continue
+					}
+
+					select {
+					case w.Ch<-ev:
+					default:
+					}
+				}
+			}
 		}
 	}
 
 }
 
+func (s *KVStore) CancelWatcher(id int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	w, ok := s.watchersByID[id]
+	if !ok {
+		Tools.Debug("CancelWatcher id %d not found", id)
+		return
+	}
+
+	if w.Prefix {
+		ws := s.prefixWatchers[w.Key]
+
+		for i, x := range ws {
+
+			if x.ID == id {
+				ws = append(ws[:i], ws[i+1:]...)
+				break
+			}
+		}
+
+		if len(ws) == 0 {
+			delete(s.prefixWatchers, w.Key)
+		} else {
+			s.prefixWatchers[w.Key] = ws
+		}
+
+	} else {
+		ws := s.watchers[w.Key]
+
+		for i, x := range ws {
+
+			if x.ID == id {
+				ws = append(ws[:i], ws[i+1:]...)
+				break
+			}
+		}
+
+		if len(ws) == 0 {
+			delete(s.watchers, w.Key)
+		} else {
+			s.watchers[w.Key] = ws
+		}
+	}
+
+	delete(s.watchersByID, id)
+
+	close(w.Ch)
+}

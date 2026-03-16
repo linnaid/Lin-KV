@@ -18,6 +18,8 @@ func NewKVStore() *KVStore {
 		watchersByID: make(map[int64]*Watcher),
 
 		keyLease: make(map[string]int64),
+
+		eventCh: make(chan Event, 1024),
 	}
 
 	leaseMgr := NewLeaseManager(kv)
@@ -26,6 +28,8 @@ func NewKVStore() *KVStore {
 
 	// 开始循环leaseMgr，自动过期清理
 	go leaseMgr.expirationLoop()
+	 
+	go kv.dispatcherLoop()
 
 	return kv
 }
@@ -54,12 +58,14 @@ func (s *KVStore) Put(k string, v []byte, leaseID int64) Revision{
 	e_val := make([]byte, len(value))
 	copy(e_val, value)
 
-	s.events = append(s.events, Event{
+	ev := Event{
 		Type: EventPut,
 		Key: k,
 		Value: e_val,
 		Rev: rev,
-	})
+	}
+
+	s.events = append(s.events, ev)
 
 	s.mu.Unlock()
 
@@ -68,12 +74,16 @@ func (s *KVStore) Put(k string, v []byte, leaseID int64) Revision{
 		s.leaseMgr.AttachKey(k, leaseID)
 	}
 
-	s.notifyWacthers(Event{
-		Type: EventPut,
-		Key: k,
-		Rev: rev,
-		Value: value,
-	})
+	select {
+	case s.eventCh<-ev:
+	default:
+	}
+	// s.notifyWatchers(Event{
+	// 	Type: EventPut,
+	// 	Key: k,
+	// 	Rev: rev,
+	// 	Value: value,
+	// })
 
 	return rev
 }
@@ -94,18 +104,18 @@ func (s *KVStore) Put(k string, v []byte, leaseID int64) Revision{
 // 	}
 // }
 
-func (s *KVStore) Get(k string, rev int64) ([]byte, bool) {
+func (s *KVStore) Get(k string, rev int64) ([]byte, int64, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	version, ok := s.data[k]
 	if !ok {
-		return nil, false
+		return nil, rev, false
 	}
 
 	if rev != 0 && rev <= s.compactRev {
 		Tools.Warn("rev <= s.compactRev", rev, s.compactRev)
-		return nil, false
+		return nil, rev, false
 	}
 
 	if rev == 0 {
@@ -114,7 +124,7 @@ func (s *KVStore) Get(k string, rev int64) ([]byte, bool) {
 
 	if len(version) == 0 {
 		Tools.Debug("versions的长度为0,In Get")
-		return nil, false
+		return nil, rev, false
 	}
 
 	left := 0
@@ -134,18 +144,19 @@ func (s *KVStore) Get(k string, rev int64) ([]byte, bool) {
 
 	if pos == -1 {
 		Tools.Warn("pos == -1")
-		return nil, false
+		return nil, rev, false
 	}
 
 	v := version[pos]
 	if v.Deleted {
 		Tools.Warn("v.Deleted = true")
-		return nil, false
+		return nil, rev, false
 	}
+
 	val := make([]byte, len(v.Value))
 	copy(val, v.Value)
 
-	return val, true
+	return val, rev, true
 	// for i := len(version) - 1; i >= 0; i-- {
 	// 	if version[i].Rev.Main <= rev {
 	// 		if version[i].Deleted {
@@ -174,12 +185,19 @@ func (s *KVStore) Delete(k string) Revision{
 		Deleted: true,
 	})
 
-	s.events = append(s.events, Event{
+	ev := Event{
 		Type: EventDelete,
 		Key: k,
 		Rev: rev,
 		Value: nil,
-	})
+	}
+
+	s.events = append(s.events, ev)
+
+	select {
+	case s.eventCh<-ev:
+	default:
+	}
 
 	delete(s.keyLease, k)
 
@@ -350,60 +368,4 @@ func (s *KVStore) Snapshot() []byte {
 	}
 
 	return data
-}
-
-// func (s *KVStore) Range(start , end string, rev int64) map[string][]byte {
-// 	result := make(map[string][]byte, len(s.data))
-// 	for k, _ := range s.data {
-// 		if k >= start && k < end {
-// 			v, ok := s.Get(k, rev)
-// 			if ok {
-// 				result[k] = v
-// 			}
-// 		}
-// 	}
-// 	return result
-// }
-
-func (s *KVStore) Range(startKey, endKey string, rev int64) []KeyValue {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if rev == 0 {
-		rev = s.currentRev
-	}
-	if rev <= s.compactRev {
-		return nil
-	}
-
-	result := make([]KeyValue, 0, len(s.data))
-
-	for key, v := range s.data {
-		if key >= startKey && key < endKey {
-			n := len(v)
-			for i := n - 1; i >= 0; i-- {
-				if v[i].Rev.Main <= rev {
-					if v[i].Deleted {
-						break
-					}
-
-					val := make([]byte, len(v[i].Value))
-					copy(val, v[i].Value)
-
-					result = append(result, KeyValue{
-						Key: key,
-						Value: val,
-						Rev: v[i].Rev,
-					})
-					break
-				}
-			}
-		}
-	}
-
-	sort.Slice(result, func (i, j int) bool {
-		return result[i].Key < result[j].Key
-	})
-
-	return result
 }

@@ -7,13 +7,13 @@ import (
 
 // 1
 func (s *KVStore) Compact(rev int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if rev <= s.compactRev || rev > s.currentRev {
 		Tools.Warn("压缩不正确", rev, s.compactRev, s.currentRev)
 		return ErrCompacted
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	for key, versions := range s.data {
 		var index int
@@ -32,6 +32,7 @@ func (s *KVStore) Compact(rev int64) error {
 
 		var l int
 		l = len(versions) - 1
+
 		if index == 0 {
 			continue
 		} else if index == -1 {
@@ -41,15 +42,26 @@ func (s *KVStore) Compact(rev int64) error {
 		}
 	}
 
+	newEvents := s.events[:0]
+
+	for _, e := range s.events {
+		if e.Rev.Main > rev {
+			newEvents = append(newEvents, e)
+		}
+	}
+
+	s.events = newEvents
+
 	s.compactRev =  rev
+	
 	return nil
 }
 
 func (s *KVStore) makeSlice(index int, versions []ValueRevision, key string) {
-	e_keep := s.events[index-1:]
-	new_e_Slice := make([]Event, len(e_keep))
-	copy(new_e_Slice, e_keep)
-	s.events = e_keep
+	// e_keep := s.events[index-1:]
+	// new_e_Slice := make([]Event, len(e_keep))
+	// copy(new_e_Slice, e_keep)
+	// s.events = e_keep
 	
 	keep := versions[index-1:]
 	newSlice := make([]ValueRevision, len(keep))

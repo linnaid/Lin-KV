@@ -23,15 +23,19 @@ type KVStore struct {
 
 	currentRev int64
 	compactRev int64
-	lastCompactTime *time.Ticker
 
 	events []Event
+
 	watchers map[string][]*Watcher
 	watchersByID map[int64]*Watcher
 	nextWatcherID int64
+	prefixWatchers map[string][]*Watcher
 
 	leaseMgr *LeaseManager
+
 	keyLease map[string]int64
+
+	eventCh chan Event
 }
 
 type Event struct {
@@ -44,6 +48,7 @@ type Event struct {
 type Watcher struct {
 	ID int64
 	Key string
+	Prefix bool // 是否精确监听
 	StartRev int64
 	Ch chan Event
 }

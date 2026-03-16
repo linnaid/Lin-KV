@@ -151,7 +151,3 @@ func (lm *LeaseManager) LeaseRevoke(leaseID int64) error {
 
 	return nil
 }
-
-// 5 LeaseRevoke
-// 6 expirationLoop
-// 7 Put 集成 lease

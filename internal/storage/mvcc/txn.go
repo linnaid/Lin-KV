@@ -105,9 +105,9 @@ func (s *KVStore) Txn(txn Txn) []KeyValue {
 
 			s.events = append(s.events, ev)
 
-			s.mu.Unlock()
-			s.notifyWacthers(ev)
-			s.mu.Lock()
+			// s.mu.Unlock()
+			// s.notifyWatchers(ev)
+			// s.mu.Lock()
 
 		case OpDelete:
 			s.currentRev++
@@ -130,9 +130,13 @@ func (s *KVStore) Txn(txn Txn) []KeyValue {
 			}
 			s.events = append(s.events, ev)
 			
-			s.mu.Unlock()
-			s.notifyWacthers(ev)
-			s.mu.Lock()
+			select {
+			case s.eventCh<-ev:
+			default:
+			}
+			// s.mu.Unlock()
+			// s.notifyWatchers(ev)
+			// s.mu.Lock()
 		}
 	}
 
