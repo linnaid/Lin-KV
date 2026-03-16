@@ -14,7 +14,7 @@ func (c *Client) Put(key string, value []byte) {
 		for i := 0; i < len(c.servers); i++ {
 			Tools.Debug("?", len(c.servers))
 			req := &kv.PutRequest {
-				Key: []byte(key),
+				Key: key,
 				Value: value,
 				ClientID: c.clientID,
 				Seq: seq,
@@ -55,7 +55,7 @@ func (c *Client) Get(key string) ([]byte) {
 	for {
 		for i := 0; i < len(c.servers); i++ {
 			req := &kv.GetRequest{
-				Key: []byte(key),
+				Key: key,
 				ClientID: c.clientID,
 				Seq: seq,
 			}
