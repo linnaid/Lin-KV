@@ -29,6 +29,8 @@ func NewServer(
 
 			clientLastSeq: make(map[int64]int64),
 			clientLastValue: make(map[int64][]byte),
+
+			maxraftstate: 100,
 		}
 
 	// 开始循环接收
