@@ -12,7 +12,7 @@ func (c *Client) Put(key string, value []byte) {
 	for {
 		// Tools.Debug("?", len(c.servers))
 		for i := 0; i < len(c.servers); i++ {
-			Tools.Debug("?", len(c.servers))
+			// Tools.Debug("?", len(c.servers))
 			req := &kv.PutRequest {
 				Key: key,
 				Value: value,
@@ -36,6 +36,7 @@ func (c *Client) Put(key string, value []byte) {
 				continue
 			}
 			if reply.Err != "" {
+				// Tools.Debug("rrr?")
 				Tools.Error("reply.Err", reply.Err)
 				continue
 			}

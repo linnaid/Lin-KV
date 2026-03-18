@@ -2,7 +2,6 @@ package client
 
 import (
 	"errors"
-	"etcd-KV/Tools"
 	"etcd-KV/internal/api/kv"
 	"etcd-KV/internal/labrpc"
 	"sync"
@@ -21,7 +20,7 @@ type Client struct {
 }
 
 func Make(servers []*labrpc.ClientEnd) *Client {
-	Tools.Debug("servers", len(servers))
+	// Tools.Debug("servers", len(servers))
 	c := &Client{}
 	c.servers = servers
 	clientID := atomic.AddInt64(&globalClientID, 1)
