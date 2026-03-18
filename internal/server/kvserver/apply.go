@@ -8,8 +8,9 @@ import (
 )
 
 func (s *Server) applyLoop() {
+	Tools.Info("APPLY LOOP GOT MSG")
 	for msg := range s.applyCh {
-		// Tools.Debug("111")
+		// Tools.Info("APPLY INDEX", msg.CommandIndex)
 		if msg.SnapshotValid {
 			// s.mu.Lock()
 			// s.store.Restore(msg.Snapshot)
@@ -80,7 +81,7 @@ func (s *Server) applyLoop() {
 
 		switch cmd.Type {
 		case command.CmdPut:
-			Tools.Debug("put", cmd.Key, cmd.Value)
+			// Tools.Debug("put", cmd.Key, cmd.Value)
 			// lease 稍后实现
 			rev = s.store.Put(cmd.Key, cmd.Value, 0)
 
@@ -98,7 +99,7 @@ func (s *Server) applyLoop() {
 		s.mu.Lock()
 		index := change(msg.CommandIndex)
 		s.clientLastSeq[cmd.ClientID] = cmd.Seq
-		Tools.Info("lastClientID", cmd.ClientID)
+		// Tools.Info("lastClientID", cmd.ClientID)
 		if ch, ok := s.waitCh[index]; ok {
 
 			if ch.ClientID == cmd.ClientID && 
@@ -117,7 +118,7 @@ func (s *Server) applyLoop() {
 			   } 
 		}
 		s.mu.Unlock()
-
+		
 		if s.needSnapshot() {
 			snapshot := s.makeSnapshot()
 			s.raft.Snapshot(msg.CommandIndex, snapshot)

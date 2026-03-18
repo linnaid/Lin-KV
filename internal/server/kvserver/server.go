@@ -3,7 +3,6 @@ package kvserver
 
 import (
 	"context"
-	"etcd-KV/Tools"
 	"etcd-KV/internal/api/kv"
 	"etcd-KV/internal/command"
 	"etcd-KV/internal/raft"
@@ -84,7 +83,7 @@ func (s *Server)  Put(
 		// 提交到Raft
 		index_raft, _, isLeader := s.raft.Start(data)
 		if !isLeader {
-			Tools.Debug("123")
+			// Tools.Debug("123")
 			res.Err = ErrNotLeader.Error()
 			return res, ErrNotLeader
 		}
