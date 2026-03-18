@@ -18,6 +18,12 @@ type waitEntry struct {
 	Err error
 }
 
+type ServerSnapshot struct {
+	KVSnapshot []byte
+
+	ClientLastSeq map[int64]int64
+	ClientLastValue map[int64][]byte
+}
 
 type Server struct {
 	id int
@@ -33,6 +39,8 @@ type Server struct {
 	// 客户端去重
 	clientLastSeq map[int64]int64  // 最后一次执行请求的Seq
 	clientLastValue map[int64][]byte  // 最后一次执行请求的返回值
+
+	maxraftstate int
 }
 
 var ErrNotLeader = errors.New("Is not Leader.")
