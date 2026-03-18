@@ -141,3 +141,7 @@ func (rf *Raft) PersistBytes() int {
 	defer rf.mu.Unlock()
 	return rf.persister.RaftStateSize()
 }
+
+func (rf *Raft) RaftStateSize() int {
+	return rf.persister.RaftStateSize()
+}
