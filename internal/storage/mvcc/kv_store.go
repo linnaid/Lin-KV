@@ -119,7 +119,7 @@ func (s *KVStore) Get(k string, rev int64) ([]byte, int64, bool) {
 	}
 
 	if rev == 0 {
-		rev = s.compactRev
+		rev = s.currentRev
 	}
 
 	if len(version) == 0 {
@@ -143,7 +143,7 @@ func (s *KVStore) Get(k string, rev int64) ([]byte, int64, bool) {
 	}
 
 	if pos == -1 {
-		Tools.Warn("pos == -1")
+		Tools.Warn("pos == -1", s.currentRev)
 		return nil, rev, false
 	}
 
