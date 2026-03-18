@@ -11,19 +11,40 @@ func (s *Server) applyLoop() {
 	for msg := range s.applyCh {
 		// Tools.Debug("111")
 		if msg.SnapshotValid {
+			// s.mu.Lock()
+			// s.store.Restore(msg.Snapshot)
+			// // TODO: restore clientLastSeq + clientLastValue
+			// s.mu.Unlock()
+			// continue
+
+			var snap ServerSnapshot
+
+			err := command.Decode(msg.Command, &snap)
+			if err != nil {
+				Tools.Debug("SnapshotRestore error")
+				panic(err)
+			}
+
 			s.mu.Lock()
+
 			s.store.Restore(msg.Snapshot)
-			// TODO: restore clientLastSeq + clientLastValue
+			s.clientLastSeq = snap.ClientLastSeq
+			s.clientLastValue = snap.ClientLastValue
+
 			s.mu.Unlock()
-			continue
 		}
+
 		if !msg.CommandValid {
 			continue
 		}
+
 		data:= msg.Command
 
-		cmd, err := command.Decode(data)
+		var cmd command.KVCommand
+
+		err := command.Decode(data, &cmd)
 		if err != nil {
+			Tools.Debug("Decode error in applyLoop.")
 			panic(err)
 		}
 // Tools.Debug("put", cmd.Key, cmd.Value, cmd.Type)
@@ -60,7 +81,8 @@ func (s *Server) applyLoop() {
 		switch cmd.Type {
 		case command.CmdPut:
 			Tools.Debug("put", cmd.Key, cmd.Value)
-			rev = s.store.Put(cmd.Key, cmd.Value)
+			// lease 稍后实现
+			rev = s.store.Put(cmd.Key, cmd.Value, 0)
 
 		case command.CmdDelete:
 			rev = s.store.Delete(cmd.Key)
@@ -95,5 +117,12 @@ func (s *Server) applyLoop() {
 			   } 
 		}
 		s.mu.Unlock()
+
+		if s.needSnapshot() {
+			snapshot := s.makeSnapshot()
+			s.raft.Snapshot(msg.CommandIndex, snapshot)
+		}
+
 	}
+
 }
