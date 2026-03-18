@@ -44,7 +44,7 @@ func (rf *Raft) persist() {
 
 	data, err := proto.Marshal(e)
 	if err != nil {
-		// Tools.Error("persist marshal failed.", err.Error())
+		// Tools.("persist marshal failed.", err.())
 		return
 	}
 	// data := w.Bytes()
@@ -97,7 +97,7 @@ func (rf *Raft) readPersist(data []byte) {
 		rf.log = restoreLogFromPB(e.Log)
 	} else {
 		rf.log = []LogEntry{{
-			Term: rf.lastIncludeTerm,
+			Term:  rf.lastIncludeTerm,
 			Index: rf.lastIncludeIndex,
 		}}
 	}

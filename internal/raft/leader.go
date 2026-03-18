@@ -24,7 +24,7 @@ func (rf *Raft) logUpdate() {
 		}
 		rf.mu.Unlock()
 
-		if len(rf.peers) == 1 {
+		if len(rf.peers) <= 1 {
 			rf.mu.Lock()
 			rf.updateCommiIndex()
 			rf.mu.Unlock()
@@ -209,6 +209,7 @@ func (rf *Raft) updateCommiIndex() {
 	// Tools.Info("updateCommite Index")
 
 	lastIndex := rf.lastIncludeIndex + len(rf.log) - 1
+	// Tools.Info("lastIndex", lastIndex, rf.commitIndex)
 	for N := lastIndex; N > rf.commitIndex; N-- {
 		// Tools.Info("N=", N)
 		if N <= rf.lastIncludeIndex {

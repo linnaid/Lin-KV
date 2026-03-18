@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	// "etcd-KV/Tools"
 	"etcd-KV/internal/labrpc"
 	"etcd-KV/internal/storage"
 	"etcd-KV/internal/storage/persister"
@@ -65,6 +64,7 @@ func (rf *Raft) Start(command []byte) (int, int, bool) {
 		return -1, term, isLeader
 	} 
 	lastIndex := rf.lastIncludeIndex + len(rf.log) - 1
+	// Tools.Info("lem(log)", len(rf.log))
 	new_index := lastIndex + 1 
 	entry := LogEntry{
 		Command: command,
@@ -73,8 +73,16 @@ func (rf *Raft) Start(command []byte) (int, int, bool) {
 	}
 	rf.log = append(rf.log, entry)
 	// rf.wal.Append(entry)
-	if len(rf.peers) == 1 {
+	if len(rf.peers) <= 1 {
 		rf.commitIndex = new_index
+
+		// go func(entry LogEntry) {
+		// 	rf.applyCh<-ApplyMsg{
+		// 		CommandValid: true,
+		// 		Command: entry.Command,
+		// 		CommandIndex: entry.Index,
+		// 	}
+		// }(entry)
 	}
 	// Tools.Info("len(rf.log)", len(rf.log))
 	rf.persist()
@@ -109,7 +117,14 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.lastIncludeTerm = 0
 	rf.currentTerm = 0
 	rf.votedFor = -1
+	/////////////////////////////////
 	rf.state = Follower
+	if len(peers) <= 1 {
+		rf.state = Leader
+		go rf.logUpdate()
+	}
+
+	/////////////////////////////////
 	rf.heartbeatInterval = 100 * time.Millisecond
 	rf.roleCh = make(chan RoleEvent, 8)
 	rf.readPersist(persister.ReadRaftState())
