@@ -2,24 +2,11 @@ package client
 
 import (
 	"errors"
-	"etcd-KV/internal/api/kv"
-	"etcd-KV/internal/labrpc"
-	"sync"
+	"etcd-KV/internal/api/kv/model"
 	"sync/atomic"
 )
 
-var globalClientID int64
-
-type Client struct {
-	mu sync.Mutex
-
-	servers []*labrpc.ClientEnd
-	leader int
-	clientID int64
-	seq int64
-}
-
-func Make(servers []*labrpc.ClientEnd) *Client {
+func Make(servers []RPCClient) *Client {
 	// Tools.Debug("servers", len(servers))
 	c := &Client{}
 	c.servers = servers
@@ -47,13 +34,21 @@ var ErrTimeout = errors.New("Is TimeOut.")
 
 func (c *Client) callPut(i int, req *kv.PutRequest) (*kv.PutResponse, error) {
 	reply := &kv.PutResponse{}
-	ok := c.servers[i].Call(
+	// ok := c.servers[i].Call(
+	// 	"RPCAdapter.Put",
+	// 	req,
+	// 	reply,
+	// )
+
+	// if !ok {
+	// 	return nil, ErrRPC
+	// }
+	err := c.servers[i].Call(
 		"RPCAdapter.Put",
 		req,
 		reply,
 	)
-
-	if !ok {
+	if err != nil {
 		return nil, ErrRPC
 	}
 
@@ -63,3 +58,4 @@ func (c *Client) callPut(i int, req *kv.PutRequest) (*kv.PutResponse, error) {
 
 	return reply, nil
 }
+
