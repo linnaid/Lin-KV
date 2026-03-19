@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package = "etcd-KV/internal/api/kv/pb";
+
+message PutRequest {
+    string key = 1;
+    bytes value = 2;
+    int64 client_id = 3;
+    int64 seq = 4;
+}
+
+message PutResponse {
+    string err = 1;
+}
+
+message GetRequest {
+    string key = 1;
+    int64 client_id = 2;
+    int64 seq = 3;
+}
+
+message GetResponse {
+    bytes value = 1;
+    string err = 2;
+}
+
+message WatchRequest {
+    string key = 1;
+    int64 revision = 2;
+    int64 client_id = 3;
+    bool prefix = 4;
+    int64 seq = 5;
+}
+
+message Event {
+    string key = 1;
+    bytes value = 2;
+    string type = 3;
+}
+
+message WatchResponse {
+    repeated Event events = 1;
+    int64 revision = 2;
+    string err = 3;
+}
+
+service KV {
+    rpc Put(PutRequest) returns (PutResponse);
+    rpc Get(GetRequest) returns (GetResponse);
+
+    // Streaming watch
+    rpc Watch(WatchRequest) returns (stream WatchResponse);
+}
