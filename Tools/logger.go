@@ -13,6 +13,7 @@ const (
 	colorRed    = "\x1b[31m"
 	colorGreen  = "\x1b[32m"
 	colorYellow = "\x1b[33m"
+	colorOrange = "\x1b[33m"
 	colorBlue   = "\x1b[34m"
 )
 
@@ -28,6 +29,11 @@ func timestamp() string {
 func Debug(msg string, args ...any) {
 	msg = " msg = " + msg
 	print(infoLog, colorBlue, "DEBUG", msg, args...)
+}
+
+func RIGHT(msg string, args ...any) {
+	msg = "msg = " + msg
+	print(infoLog, colorOrange, "RIGHT", msg, args...)
 }
 
 func Info(msg string, args ...any) {
