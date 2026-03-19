@@ -3,7 +3,7 @@ package kvserver
 
 import (
 	"context"
-	"etcd-KV/internal/api/kv"
+	"etcd-KV/internal/api/kv/model"
 	"etcd-KV/internal/command"
 	"etcd-KV/internal/raft"
 	"etcd-KV/internal/storage/mvcc"

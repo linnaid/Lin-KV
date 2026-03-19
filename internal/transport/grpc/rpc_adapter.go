@@ -2,7 +2,7 @@ package grpc
 
 import (
 	"context"
-	"etcd-KV/internal/api/kv"
+	"etcd-KV/internal/api/kv/model"
 	"etcd-KV/internal/server/kvserver"
 	"time"
 )

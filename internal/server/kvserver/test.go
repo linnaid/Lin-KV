@@ -2,7 +2,7 @@ package kvserver
 
 import (
 	"context"
-	"etcd-KV/internal/api/kv"
+	"etcd-KV/internal/api/kv/model"
 	"fmt"
 	"log"
 	"sync"

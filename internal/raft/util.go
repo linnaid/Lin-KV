@@ -1,7 +1,11 @@
 // 工具，不属于任何一个模块，但被使用在许多模块内
 package raft
 
-import "sync/atomic"
+import (
+	"errors"
+	"etcd-KV/internal/api/kv/model"
+	"sync/atomic"
+)
 
 func (rf *Raft) killed() bool {
 	z := atomic.LoadInt32(&rf.dead)
@@ -27,4 +31,18 @@ func (rf *Raft) GetState() (int, bool) {
 		isleader = false
 	}
 	return id, isleader
+}
+
+
+func GetReplyError(reply interface{}) error {
+	switch r := reply.(type) {
+	case *kv.GetResponse:
+		return errors.New(r.Err)
+	case *kv.DeleteResponse:
+		return errors.New(r.Err)
+	case *kv.PutResponse:
+		return errors.New(r.Err)
+	default:
+		return errors.New("reply 不是任何一种结构体(raft/util.go)")
+	}
 }
