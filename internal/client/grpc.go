@@ -28,7 +28,6 @@ func NewGrpcClient(conn *grpc.ClientConn) *GrpcClient {
 	}
 }
 
-// 只支持 Get 版本
 func (c *GrpcClient) Call(method string, req interface{}, resp interface{}) error {
 	switch method {
 
