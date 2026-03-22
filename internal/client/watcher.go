@@ -4,6 +4,7 @@ import (
 	"context"
 	"etcd-KV/Tools"
 	"etcd-KV/internal/api/kv/model"
+	"etcd-KV/internal/api/kv/pb"
 	"time"
 )
 
@@ -97,9 +98,121 @@ func (c *Client) watchInternal(ctx context.Context, key string, prefix bool) <-c
 
 ///////////////////////////////////////////////////
 func (c *Client) Watch(ctx context.Context, key string) <-chan *kv.Event {
-	return c.watchInternal(ctx, key, false)
+	ch := make(chan *kv.Event, 100)
+	
+	go func ()  {
+		defer close(ch)
+
+		streamCh := c.watchStream(ctx, key, false)
+
+		select {
+		case ev, ok := <-streamCh:
+			if !ok {
+				// 因为 streaming失败，所以fallback
+				for ev := range c.watchInternal(ctx, key, false) {
+					select {
+					case ch <-ev:
+					case <-ctx.Done():
+						return 
+					}
+				}
+				return
+			}
+
+			select {
+			case ch <-ev:
+			case <-ctx.Done():
+				return 
+			}
+
+			for ev := range streamCh {
+				select{
+				case ch <-ev:
+				case <-ctx.Done():
+					return 
+				}
+			}
+
+		case <-ctx.Done():
+			return
+		}
+	}()
+
+	return ch
 }
 
 func (c *Client) WatchPrefix(ctx context.Context, prefix string) <-chan *kv.Event {
 	return c.watchInternal(ctx, prefix, true)
+}
+
+// 后面要改成leader routing
+func (c *Client) watchStream(ctx context.Context, key string, prefix bool) <-chan *kv.Event {
+	ch :=make(chan *kv.Event, 100)
+
+	go func ()  {
+		defer close(ch)
+
+		req := &pb.WatchRequest{
+			Key: key,
+			Prefix: prefix,
+			ClientId: c.clientID,
+			Revision: 0,
+		}
+
+		// 节点不只一个，目前假定为一个节点
+		stream, err := c.servers[0].Stream("RPCAdapter.Watch", req)
+		if err != nil {
+			Tools.Debug("RPCAdapter.Watch err not nil in watchStream", err.Error())
+			return
+		}
+
+		defer stream.Close()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			var resp pb.WatchResponse
+
+			err := stream.Recv(&resp)
+			if err != nil {
+				if ctx.Err() != nil {
+					Tools.Debug("ctx.Err != nil in watchStream", ctx.Err().Error())
+					return
+				}
+				Tools.Debug("stream.recv err not nil in watchStream", err)
+				return
+			}
+		
+			for _, e := range resp.Events {
+
+				var t kv.OpType
+
+				if e.Type == "Put" {
+					t = kv.OpPut
+				} else if e.Type == "Delete" {
+					t = kv.OpDelete
+				} else {
+					continue
+				}
+
+				ev := &kv.Event{
+					Type: t,
+					Key: e.Key,
+					Value: e.Value,
+				}
+
+				select {
+				case ch <-ev:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}		
+	}()
+
+	return ch
 }
