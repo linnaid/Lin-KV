@@ -37,7 +37,7 @@ type RPCClient interface{
 	Call(method string, req interface{}, resp interface{}) error
 
 	// streaming
-	// Stream(method string, req interface{}) (RPCStream, error)
+	Stream(method string, req interface{}) (RPCStream, error)
 }
 
 type rpcFunc func(srv int) error
@@ -49,4 +49,8 @@ type LabrpcClient struct {
 type GrpcClient struct {
 	cli pb.KVClient
 	conn *grpc.ClientConn
+}
+
+type GrpcStream struct {
+	stream pb.KV_WatchClient
 }
