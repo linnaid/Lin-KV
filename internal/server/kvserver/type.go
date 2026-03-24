@@ -2,6 +2,7 @@ package kvserver
 
 import (
 	"errors"
+	"etcd-KV/internal/api/kv/model"
 	"etcd-KV/internal/raft"
 	"etcd-KV/internal/storage/mvcc"
 	"sync"
@@ -41,7 +42,16 @@ type Server struct {
 	clientLastValue map[int64][]byte  // 最后一次执行请求的返回值
 
 	maxraftstate int
+
+	// client registry
+	watchers map[string][]*watcher
 }
 
 var ErrNotLeader = errors.New("Is not Leader.")
 var ErrTimeout = errors.New("Is TimeOut.")
+
+type watcher struct {
+	key      string
+	prefix   bool
+	ch chan *kv.Event
+}

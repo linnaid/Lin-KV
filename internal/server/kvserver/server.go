@@ -30,6 +30,8 @@ func NewServer(
 			clientLastValue: make(map[int64][]byte),
 
 			maxraftstate: 100,
+
+			watchers: make(map[string][]*watcher),
 		}
 
 	// 开始循环接收
