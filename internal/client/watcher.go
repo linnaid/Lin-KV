@@ -152,66 +152,87 @@ func (c *Client) watchStream(ctx context.Context, key string, prefix bool) <-cha
 	go func ()  {
 		defer close(ch)
 
-		req := &pb.WatchRequest{
-			Key: key,
-			Prefix: prefix,
-			ClientId: c.clientID,
-			Revision: 0,
-		}
-
-		// 节点不只一个，目前假定为一个节点
-		stream, err := c.servers[0].Stream("RPCAdapter.Watch", req)
-		if err != nil {
-			Tools.Debug("RPCAdapter.Watch err not nil in watchStream", err.Error())
-			return
-		}
-
-		defer stream.Close()
+		var rev int64 = 0
 
 		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
+			req := &pb.WatchRequest{
+				Key: key,
+				Prefix: prefix,
+				ClientId: c.clientID,
+				Revision: rev,
 			}
 
-			var resp pb.WatchResponse
+			// 节点不只一个，目前假定为一个节点
+			deleay := 100 * time.Millisecond
 
-			err := stream.Recv(&resp)
+			stream, err := c.servers[0].Stream("RPCAdapter.Watch", req)
 			if err != nil {
-				if ctx.Err() != nil {
-					Tools.Debug("ctx.Err != nil in watchStream", ctx.Err().Error())
-					return
-				}
-				Tools.Debug("stream.recv err not nil in watchStream", err)
-				return
-			}
-		
-			for _, e := range resp.Events {
-
-				var t kv.OpType
-
-				if e.Type == "Put" {
-					t = kv.OpPut
-				} else if e.Type == "Delete" {
-					t = kv.OpDelete
-				} else {
-					continue
-				}
-
-				ev := &kv.Event{
-					Type: t,
-					Key: e.Key,
-					Value: e.Value,
-				}
+				Tools.Debug("RPCAdapter.Watch err not nil in watchStream", err.Error())
 
 				select {
-				case ch <-ev:
+				case <-time.After(deleay):
+					if deleay < time.Second {
+						deleay *= 2
+					}
+					continue
 				case <-ctx.Done():
-					return
+					return 
 				}
 			}
-		}		
+			deleay = 100 * time.Millisecond
+
+			// defer stream.Close()
+
+			for {
+				select {
+				case <-ctx.Done():
+					stream.Close()
+					return
+				default:
+				}
+
+				var resp pb.WatchResponse
+
+				err := stream.Recv(&resp)
+				if err != nil {
+					if ctx.Err() != nil {
+						Tools.Debug("ctx.Err != nil in watchStream", ctx.Err().Error())
+						return
+					}
+
+					Tools.Debug("stream.recv err not nil in watchStream", err)
+					stream.Close()
+					break
+				}
+
+				rev = resp.Revision
+			
+				for _, e := range resp.Events {
+
+					var t kv.OpType
+
+					if e.Type == "PUT" {
+						t = kv.OpPut
+					} else if e.Type == "DELETE" {
+						t = kv.OpDelete
+					} else {
+						continue
+					}
+
+					ev := &kv.Event{
+						Type: t,
+						Key: e.Key,
+						Value: e.Value,
+					}
+
+					select {
+					case ch <-ev:
+					case <-ctx.Done():
+						return
+					}
+				}
+			}	
+		}	
 	}()
 
 	return ch
