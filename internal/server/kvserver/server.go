@@ -27,7 +27,8 @@ func NewServer(
 			waitCh: make(map[int64]*waitEntry),
 
 			clientLastSeq: make(map[int64]int64),
-			clientLastValue: make(map[int64][]byte),
+			// clientLastValue: make(map[int64][]byte),
+			clientLastResult: make(map[int64]Result),
 
 			maxraftstate: 100,
 

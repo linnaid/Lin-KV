@@ -30,7 +30,8 @@ func (s *Server) applyLoop() {
 
 			s.store.Restore(msg.Snapshot)
 			s.clientLastSeq = snap.ClientLastSeq
-			s.clientLastValue = snap.ClientLastValue
+			// s.clientLastValue = snap.ClientLastValue
+			s.clientLastResult = snap.ClientLastResult
 
 			s.mu.Unlock()
 		}
@@ -52,17 +53,28 @@ func (s *Server) applyLoop() {
 
 		// Dedup
 		s.mu.Lock()
-		if cmd.Seq <= s.clientLastSeq[cmd.ClientID] {
+
+		lastSeq := s.clientLastSeq[cmd.ClientID]
+		if cmd.Seq < lastSeq {
+			s.mu.Unlock()
+			continue
+		}
+
+		if cmd.Seq == lastSeq {
 
 			commandIndex := change(msg.CommandIndex)
 
 			if ch, ok := s.waitCh[commandIndex]; ok {
 				if match(ch, &cmd) {
-					ch.Result = Result{
-						Cmd: cmd,
-						Value: s.clientLastValue[cmd.ClientID],
-						Err: nil,
-					}
+					// ch.Result = Result{
+					// 	Cmd: cmd,
+					// 	Value: s.clientLastValue[cmd.ClientID],
+					// 	Err: nil,
+					// 	Rev: &mvcc.Revision{
+					// 		Main: cmd.Rev,
+					// 	},
+					// }
+					ch.Result = s.clientLastResult[cmd.ClientID]
 					close(ch.Notify)
 					delete(s.waitCh, commandIndex)
 				} else {
@@ -100,6 +112,9 @@ func (s *Server) applyLoop() {
 		}
 		
 		s.mu.Lock()
+		result := Result{
+			lastSeq
+		}
 		index := change(msg.CommandIndex)
 		s.clientLastSeq[cmd.ClientID] = cmd.Seq
 		// Tools.Info("lastClientID", cmd.ClientID)
@@ -117,7 +132,7 @@ func (s *Server) applyLoop() {
 				ch.Result.Err = nil
 				close(ch.Notify)
 				delete(s.waitCh, index)
-				
+
 			   } else {
 				delete(s.waitCh, index)
 			   }

@@ -54,6 +54,8 @@ func (s *KVStore) Watch(key string, fromRev int64, prefix bool) (<-chan Event, i
 		StartRev: fromRev,
 		Prefix: prefix,
 		Ch: ch,
+
+		lastSentRev: fromRev - 1,
 	}
 
 	if prefix {
@@ -92,13 +94,18 @@ func (s *KVStore) dispatcherLoop() {
 		s.mu.RUnlock()
 
 		for _, w := range watchers {
-			if ev.Rev.Main < w.StartRev {
+			// if ev.Rev.Main < w.StartRev {
+			// 	continue
+			// }
+			if ev.Rev.Main <= w.lastSentRev {
 				continue
 			}
 
 			select {
 			case w.Ch<-ev:
+				w.lastSentRev = ev.Rev.Main
 			default:
+				s.CancelWatcher(w.ID)
 			}
 		}
 
@@ -115,13 +122,18 @@ func (s *KVStore) dispatcherLoop() {
 			if strings.HasPrefix(ev.Key, prefix) {
 				for _, w := range ws {
 
-					if ev.Rev.Main < w.StartRev {
+					// if ev.Rev.Main < w.StartRev {
+					// 	continue
+					// }
+					if ev.Rev.Main <= w.lastSentRev {
 						continue
 					}
 
 					select {
 					case w.Ch<-ev:
+						w.lastSentRev = ev.Rev.Main
 					default:
+						s.CancelWatcher(w.ID)
 					}
 				}
 			}

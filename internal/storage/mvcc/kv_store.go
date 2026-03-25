@@ -74,10 +74,14 @@ func (s *KVStore) Put(k string, v []byte, leaseID int64) Revision{
 		s.leaseMgr.AttachKey(k, leaseID)
 	}
 
-	select {
-	case s.eventCh<-ev:
-	default:
-	}
+	// 不能非阻塞发送，可能会丢事件
+	// select {
+	// case s.eventCh<-ev:
+	// default:
+	// }
+
+		s.eventCh<- ev
+
 	// s.notifyWatchers(Event{
 	// 	Type: EventPut,
 	// 	Key: k,
@@ -194,10 +198,11 @@ func (s *KVStore) Delete(k string) Revision{
 
 	s.events = append(s.events, ev)
 
-	select {
-	case s.eventCh<-ev:
-	default:
-	}
+	// select {
+	// case s.eventCh<-ev:
+	// default:
+	// }
+	s.eventCh<- ev
 
 	delete(s.keyLease, k)
 

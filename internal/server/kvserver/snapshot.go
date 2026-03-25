@@ -14,7 +14,8 @@ func (s *Server) makeSnapshot() []byte {
 	snap := ServerSnapshot{
 		KVSnapshot: kvSnap,
 		ClientLastSeq: s.clientLastSeq,
-		ClientLastValue: s.clientLastValue,
+		// ClientLastValue: s.clientLastValue,
+		ClientLastResult: s.clientLastResult,
 	}
 
 	data, err := command.Encode(&snap)

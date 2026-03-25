@@ -51,6 +51,8 @@ type Watcher struct {
 	Prefix bool // 是否精确监听
 	StartRev int64
 	Ch chan Event
+
+	lastSentRev  int64
 }
 
 type kvSnapshot struct {

@@ -27,7 +27,8 @@ type ServerSnapshot struct {
 	KVSnapshot		 []byte
 
 	ClientLastSeq	 map[int64]int64
-	ClientLastValue	 map[int64][]byte
+	// ClientLastValue	 map[int64][]byte
+	ClientLastResult map[int64]Result
 }
 
 type Server struct {
@@ -45,7 +46,8 @@ type Server struct {
 
 	// 客户端去重
 	clientLastSeq 	map[int64]int64  // 最后一次执行请求的Seq
-	clientLastValue map[int64][]byte  // 最后一次执行请求的返回值
+	// clientLastValue map[int64][]byte  // 最后一次执行请求的返回值(only Get)
+	clientLastResult map[int64]Result // (All Order)
 
 	maxraftstate 	int
 
