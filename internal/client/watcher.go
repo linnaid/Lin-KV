@@ -211,11 +211,12 @@ func (c *Client) watchStream(ctx context.Context, key string, prefix bool) <-cha
 
 					var t kv.OpType
 
-					if e.Type == "PUT" {
+					switch e.Type {
+					case "PUT":
 						t = kv.OpPut
-					} else if e.Type == "DELETE" {
+					case "DELETE":
 						t = kv.OpDelete
-					} else {
+					default:
 						continue
 					}
 

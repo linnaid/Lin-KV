@@ -57,14 +57,17 @@ func (s *Server) applyLoop() {
 			commandIndex := change(msg.CommandIndex)
 
 			if ch, ok := s.waitCh[commandIndex]; ok {
-
-				if cmd.Type == command.CmdGet {
-					ch.Value = s.clientLastValue[cmd.ClientID] 
+				if match(ch, &cmd) {
+					ch.Result = Result{
+						Cmd: cmd,
+						Value: s.clientLastValue[cmd.ClientID],
+						Err: nil,
+					}
+					close(ch.Notify)
+					delete(s.waitCh, commandIndex)
+				} else {
+					delete(s.waitCh, commandIndex)
 				}
-
-				ch.Err = nil
-				close(ch.Notify)
-				delete(s.waitCh, commandIndex)
 			}
 
 			s.mu.Unlock()
@@ -102,20 +105,30 @@ func (s *Server) applyLoop() {
 		// Tools.Info("lastClientID", cmd.ClientID)
 		if ch, ok := s.waitCh[index]; ok {
 
-			if ch.ClientID == cmd.ClientID && 
-			   ch.Seq == cmd.Seq {
+			if match(ch, &cmd) {
 
 				if ok_get {
-					ch.Value = value
+					ch.Result.Value = value
 					s.clientLastValue[cmd.ClientID] = value
 				} else {
-					ch.Rev = &rev
+					ch.Result.Rev = &rev
 				}
 				
-				ch.Err = nil
+				ch.Result.Err = nil
 				close(ch.Notify)
 				delete(s.waitCh, index)
-			   } 
+				
+			   } else {
+				delete(s.waitCh, index)
+			   }
+
+		} else {
+			// 🔥 关键：缓存结果（防止先 apply 后注册）
+			s.LastResult[index] = Result{
+				Rev: &rev,
+				Value: value,
+				Err: nil,
+			}
 		}
 		s.mu.Unlock()
 		

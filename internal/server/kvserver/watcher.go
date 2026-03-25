@@ -1,5 +1,6 @@
 package kvserver
 
+
 func (s *Server) addWatcher(w *watcher) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

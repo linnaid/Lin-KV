@@ -12,25 +12,25 @@ import (
 var globalClientID int64
 
 type Client struct {
-	mu sync.Mutex
+	mu 			sync.Mutex
 
 	// servers []*labrpc.ClientEnd
-	servers []RPCClient
-	leader int
-	clientID int64
-	seq int64
+	servers		[]RPCClient
+	leader 		int
+	clientID 	int64
+	seq 		int64
 }
 
 type Txn struct {
-	client *Client
-	ops []*kv.Op
+	client   *Client
+	ops 	[]*kv.Op
 }
 
 
 // 用于Server push
 type RPCStream interface {
-	Recv(resp interface{}) error 
-	Close() error
+	Recv(resp interface{})  error 
+	Close() 				error
 }
 
 type RPCClient interface{
@@ -47,10 +47,10 @@ type LabrpcClient struct {
 }
 
 type GrpcClient struct {
-	cli pb.KVClient
-	conn *grpc.ClientConn
+	cli		 pb.KVClient
+	conn 	*grpc.ClientConn
 }
 
 type GrpcStream struct {
-	stream pb.KV_WatchClient
+	stream   pb.KV_WatchClient
 }

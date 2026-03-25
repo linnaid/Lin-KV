@@ -74,6 +74,8 @@ func (s *Server)  Put(
 			Notify: make(chan struct{}),
 			ClientID: req.ClientID,
 			Seq: req.Seq,
+			OpType: command.CmdPut,
+			Key: req.Key,
 		}
 
 		data, err := command.Encode(&cmd)
@@ -93,6 +95,24 @@ func (s *Server)  Put(
 		index := change(index_raft)
 
 		s.mu.Lock()
+		
+		if r, ok := s.LastResult[index]; ok {
+
+			if match(ch, &r.Cmd) {
+				delete(s.LastResult, index)
+				s.mu.Unlock()
+
+				if r.Err != nil {
+					return nil, r.Err
+				}
+				if r.Rev != nil {
+					res.Revision = r.Rev.Main
+				}
+				return res, nil
+			}
+			// 不匹配直接忽略
+		}
+
 		s.waitCh[index] = ch
 		s.mu.Unlock()
 
@@ -105,12 +125,12 @@ func (s *Server)  Put(
 		// 等待 apply
 		select {
 		case <-ch.Notify:
-			if ch.Err != nil {
-				res.Err = ch.Err.Error()
-				return res, ch.Err
+			if ch.Result.Err != nil {
+				res.Err = ch.Result.Err.Error()
+				return res, ch.Result.Err
 			}
-			if ch.Rev != nil {
-				res.Revision = ch.Rev.Main
+			if ch.Result.Rev != nil {
+				res.Revision = ch.Result.Rev.Main
 			}
 			return res,nil
 		case <-ctx.Done():
@@ -175,6 +195,7 @@ func (s *Server) Get(ctx context.Context,
 func (s *Server) Delete(ctx context.Context, 
 	req *kv.DeleteRequest, 
 	) (*kv.DeleteResponse, error) {
+		res := &kv.DeleteResponse{}
 		// s.mu.Lock()
 		// if req.Seq <= s.clientLastSeq[req.ClientID] {
 		// 	s.mu.Unlock()
@@ -193,6 +214,8 @@ func (s *Server) Delete(ctx context.Context,
 			Notify: make(chan struct{}),
 			ClientID: req.ClientID,
 			Seq: req.Seq,
+			OpType: command.CmdDelete,
+			Key: req.Key,
 		}
 
 		data, err := command.Encode(cmd)
@@ -208,6 +231,24 @@ func (s *Server) Delete(ctx context.Context,
 		index := change(index_raft)
 
 		s.mu.Lock()
+		
+		if r, ok := s.LastResult[index]; ok {
+
+			if match(ch, &r.Cmd) {
+				delete(s.LastResult, index)
+				s.mu.Unlock()
+
+				if r.Err != nil {
+					return nil, r.Err
+				}
+				if r.Rev != nil {
+					res.Revision = r.Rev.Main
+				}
+				return res, nil
+			}
+			// 不匹配直接忽略
+		}
+
 		s.waitCh[index] = ch
 		s.mu.Unlock()
 
@@ -219,12 +260,12 @@ func (s *Server) Delete(ctx context.Context,
 
 		select {
 		case<-ch.Notify:
-			if ch.Err != nil {
-				return nil, ch.Err
+			if ch.Result.Err != nil {
+				return nil, ch.Result.Err
 			}
-			res := &kv.DeleteResponse{}
-			if ch.Rev != nil {
-				res.Revision = ch.Rev.Main
+			// res := &kv.DeleteResponse{}
+			if ch.Result.Rev != nil {
+				res.Revision = ch.Result.Rev.Main
 				res.Deleted = true
 			}
 			return res, nil

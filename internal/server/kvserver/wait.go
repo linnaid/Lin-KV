@@ -6,7 +6,7 @@ func (s *Server) clearWaitCh(err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i, ch := range s.waitCh {
-		ch.Err = err
+		ch.Result.Err = err
 		select {
 		case <-ch.Notify:
 

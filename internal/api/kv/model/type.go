@@ -2,71 +2,71 @@
 package kv
 
 type PutRequest struct {
-	Key string
-	Value []byte
+	Key 		string
+	Value 		[]byte
 
-	LeaseID int64
-	ClientID int64
-	Seq int64
+	LeaseID 	int64
+	ClientID 	int64
+	Seq 		int64
 }
 
 type PutResponse struct {
-	Revision int64
+	Revision   int64
 
-	Err string
+	Err 	   string
 }
 
 type GetRequest struct {
-	Key string
-	Revision int64
+	Key 		string
+	Revision 	int64
 	
-	ClientID int64
-	Seq int64
+	ClientID 	int64
+	Seq 		int64
 }
 
 type GetResponse struct {
-	Value []byte
-	Revision int64
-	Found bool
+	Value 		[]byte
+	Revision 	int64
+	Found 		bool
 
-	Err string
+	Err 		string
 }
 
 type DeleteRequest struct {
-	Key string
+	Key 		string
 
-	LeaseID int64
-	ClientID int64
-	Seq int64
+	LeaseID 	int64
+	ClientID 	int64
+	Seq 		int64
 }
 
 type DeleteResponse struct {
-	Revision int64
-	Deleted bool
+	Revision 	int64
+	Deleted 	bool
 
-	Err string
+	Err 		string
 }
 
 type TxnRequest struct {
-	Ops []*Op
-	ClientID int64
-	Seq int64
+	Ops 		[]*Op
+	ClientID 	int64
+	Seq 		int64
 }
 
 type OpResult struct {
-	Type OpType
-	Key string
-	Value []byte
+	Type 	OpType
+	Key 	string
+	Value 	[]byte
 }
 
 type TxnResponse struct {
-	Succeeded bool
-	Results []*OpResult
-	Err string
+	Succeeded    bool
+	Results 	 []*OpResult
+	Err 		 string
 }
 
 type TxnResult struct {
-	Results []*OpResult
+	Results 	[]*OpResult
 }
 
 func (r *TxnResult) Get(i int) []byte {
@@ -82,28 +82,29 @@ const (
 )
 
 type Op struct {
-	Type OpType
-	Key string
-	Value []byte
+	Type 	OpType
+	Key 	string
+	Value 	[]byte
 }
 
 type Event struct {
-	Type OpType
-	Key string
-	Value []byte
+	Type 	OpType
+	Key 	string
+	Value 	[]byte
+	Rev 	int64
 }
 
 
 type WatchRequest struct {
-	Key string
-	Prefix bool
-	Revision int64
-	ClientID int64
-	Seq int64
+	Key 		string
+	Prefix		bool
+	Revision 	int64
+	ClientID 	int64
+	Seq 		int64
 }
 
 type WatchResponse struct {
-	Events []*Event
-	Revision int64
-	Err string
+	Events 		[]*Event
+	Revision 	int64
+	Err 		string
 }

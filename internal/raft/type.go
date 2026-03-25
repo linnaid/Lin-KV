@@ -71,3 +71,19 @@ type AppendEntriesReply struct {
 	ConflictTerm  int
 	ConflictIndex int
 }
+
+type OpType string
+
+const(
+	OpPut     OpType = "PUT"
+	OpDelete  OpType = "DELETE"
+)
+
+type Op struct {
+	Type 	  OpType
+	Key 	  string
+	Value     string
+	LeaseID   int64
+	ClientID  int64
+	ReqID	  int64
+}
