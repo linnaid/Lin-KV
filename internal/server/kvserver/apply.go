@@ -63,6 +63,7 @@ func (s *Server) applyLoop() {
 		if cmd.Seq == lastSeq {
 
 			commandIndex := change(msg.CommandIndex)
+			result := s.clientLastResult[cmd.ClientID]
 
 			if ch, ok := s.waitCh[commandIndex]; ok {
 				if match(ch, &cmd) {
@@ -74,7 +75,7 @@ func (s *Server) applyLoop() {
 					// 		Main: cmd.Rev,
 					// 	},
 					// }
-					ch.Result = s.clientLastResult[cmd.ClientID]
+					ch.Result = result
 					close(ch.Notify)
 					delete(s.waitCh, commandIndex)
 				} else {
@@ -113,7 +114,12 @@ func (s *Server) applyLoop() {
 		
 		s.mu.Lock()
 		result := Result{
-			lastSeq
+			Rev: &mvcc.Revision{
+				Main: cmd.Rev,
+			},
+			Value: cmd.Value,
+			Err: nil,
+			Cmd: cmd,
 		}
 		index := change(msg.CommandIndex)
 		s.clientLastSeq[cmd.ClientID] = cmd.Seq
@@ -124,7 +130,8 @@ func (s *Server) applyLoop() {
 
 				if ok_get {
 					ch.Result.Value = value
-					s.clientLastValue[cmd.ClientID] = value
+					// s.clientLastValue[cmd.ClientID] = value
+					s.clientLastResult[cmd.ClientID] = result
 				} else {
 					ch.Result.Rev = &rev
 				}

@@ -161,7 +161,7 @@ func (s *Server) Get(ctx context.Context,
 		index, ok := s.raft.ReadIndex()
 		if !ok {
 			reply.Err = ErrNotLeader.Error()
-			return reply, ErrNotLeader
+			return nil, ErrNotLeader
 		}
 
 		for {
@@ -180,7 +180,45 @@ func (s *Server) Get(ctx context.Context,
 		}
 
 		s.mu.Lock()
+
+		// Exactly-Once dedup
+		lastSeq := s.clientLastSeq[req.ClientID]
+
+		if req.Seq < lastSeq {
+			return reply, nil
+		}
+
+		if req.Seq == lastSeq {
+			result := s.clientLastResult[req.ClientID]
+
+			valCopy := make([]byte, len(result.Value))
+			copy(valCopy, result.Value)
+
+			s.mu.Unlock()
+			return &kv.GetResponse{
+				Value: valCopy,
+				Revision: result.Rev.Main,
+			}, nil
+		}
+
 		value, rev, ok := s.store.Get(string(req.Key), req.Revision)
+
+		var valCopy []byte
+		if ok {
+			valCopy = make([]byte, len(value))
+			copy(valCopy, value)
+		}
+
+		revCopy := rev
+
+		s.clientLastSeq[req.ClientID] = req.Seq
+		s.clientLastResult[req.ClientID] = Result{
+			Rev: &mvcc.Revision{
+				Main: revCopy,
+			},
+			Value: valCopy,
+		}
+		
 		s.mu.Unlock()
 
 		if !ok {

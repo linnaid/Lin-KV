@@ -10,9 +10,17 @@ func (rf *Raft) logUpdate() {
 	// Tools.Info("logUpdate start")
 	// slog.Info("logUpdate start lalala", slog.Int("new_index", new_index))
 	for !rf.killed(){
+
+		select {
+		case <-time.After(rf.heartbeatInterval):
+		case <-rf.readTriggerCh:
+		}
+
 		rf.mu.Lock()
+		
 		new_index := len(rf.log) + rf.lastIncludeIndex - 1
 		// slog.Info("logUpdate start lalala", slog.Int("new_index", new_index))
+
 		if rf.killed() || rf.state != Leader {
 			rf.mu.Unlock()
 			event := RoleEvent{ IsLeader: false, Term: int64(rf.currentTerm)}
@@ -22,6 +30,7 @@ func (rf *Raft) logUpdate() {
 			}
 			return
 		}
+
 		rf.mu.Unlock()
 
 		if len(rf.peers) <= 1 {
@@ -29,6 +38,7 @@ func (rf *Raft) logUpdate() {
 			rf.updateCommiIndex()
 			rf.mu.Unlock()
 		}
+
 		for i := range rf.peers {
 			if i == rf.me {
 				rf.mu.Lock()
@@ -50,6 +60,7 @@ func (rf *Raft) logUpdate() {
 						rf.mu.Unlock()
 						return
 					}
+
 					rf.updateCommiIndex()
 					Index := rf.nextIndex[server]
 					// slog.Warn("No access go")
@@ -73,12 +84,15 @@ func (rf *Raft) logUpdate() {
 						rf.mu.Unlock()
 						Tools.Info("Send InstallSnapshot")
 						ok := rf.sendInstallSnapshot(server, &args, &reply)
+
 						rf.mu.Lock()
 						// defer rf.mu.Unlock()
+
 						if !ok || rf.state != Leader || rf.currentTerm != currentTerm {
 								rf.mu.Unlock()
 								return
 							}
+
 						if ok {
 							if reply.Term > rf.currentTerm {
 								rf.currentTerm = reply.Term
@@ -93,13 +107,16 @@ func (rf *Raft) logUpdate() {
 								rf.mu.Unlock()
 								return
 							}
+
 							Index = rf.lastIncludeIndex
 							rf.nextIndex[server] = Index + 1
 							rf.matchIndex[server] = Index
 						}
+
 						rf.mu.Unlock()
 						return
 					} 
+
 					// slog.Warn("No access go")
 					args := AppendEntriesArgs{
 						Term:         rf.currentTerm,
@@ -110,15 +127,18 @@ func (rf *Raft) logUpdate() {
 					Index = rf.nextIndex[server]
 					args.PrevLogIndex = Index - 1
 					sliceIdx := args.PrevLogIndex - rf.lastIncludeIndex
+
 					if sliceIdx < 0 || sliceIdx >= len(rf.log) {
 						rf.nextIndex[server] = rf.lastIncludeIndex + 1
 						rf.mu.Unlock()
 						return
 					}
+
 					args.PrevLogTerm = rf.log[sliceIdx].Term
 
 					real_Index := Index - rf.lastIncludeIndex
 					lastLogIndex := rf.lastIncludeIndex + len(rf.log) - 1
+
 					if Index > lastLogIndex {
 						args.Entries = nil
 					} else {
@@ -132,15 +152,20 @@ func (rf *Raft) logUpdate() {
 						rf.mu.Unlock()
 						return
 					}
+
 					rf.mu.Unlock()
+
 					// Tools.Info("Send Appendentries")
 					ok := rf.sendAppendEntries(server, &args, &reply)
+
 					rf.mu.Lock()
 					// defer rf.mu.Unlock()
+
 					if !ok || rf.state != Leader || args.Term != rf.currentTerm {
 						rf.mu.Unlock()
 						return
 					}
+
 					if ok {
 						if reply.Term > rf.currentTerm {
 							rf.currentTerm = reply.Term
@@ -151,9 +176,11 @@ func (rf *Raft) logUpdate() {
 							case rf.roleCh <- event:
 							default:
 							}
+
 							rf.mu.Unlock()
 							return
 						}
+
 						if reply.Success {
 							// if len(entries) > 0 {
 								rf.matchIndex[server] = args.PrevLogIndex + len(args.Entries)
@@ -164,7 +191,20 @@ func (rf *Raft) logUpdate() {
 							// 		rf.nextIndex[server] = rf.matchIndex[server] + 1
 							// 	}
 							// }
-							///////////////////////////////////////////commite
+							///////////////////////////////////////////
+
+							// ReadIndex quroum
+							if rf.pendingReadCh != nil {
+								rf.pendingReadCount++
+
+								if rf.pendingReadCount > len(rf.peers)/2 {
+									select {
+									case rf.pendingReadCh<- struct{}{}:
+									default:
+									}
+								}
+							}
+							
 						} else {
 							if reply.ConflictTerm == -1 {
 								rf.nextIndex[server] = reply.ConflictIndex
@@ -183,10 +223,12 @@ func (rf *Raft) logUpdate() {
 								// 	rf.nextIndex[server] = reply.ConflictIndex
 								// }
 							}
+
 							if reply.ConflictIndex != -1 {
 								rf.nextIndex[server] = reply.ConflictIndex
 							}
 							// time.Sleep(10 * time.Millisecond)
+
 						}
 
 						if rf.matchIndex[server] > rf.nextIndex[server] {
@@ -198,7 +240,8 @@ func (rf *Raft) logUpdate() {
 				// }
 			}(i)
 		}
-		time.Sleep(rf.heartbeatInterval)
+		
+		// time.Sleep(rf.heartbeatInterval)
 	}
 	
 }

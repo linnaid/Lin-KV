@@ -48,6 +48,10 @@ type Raft struct {
 	roleCh chan RoleEvent
 	// 保存
 	storage storage.LogStorage
+	// ReadIndex 相关(最小实现)
+	pendingReadCh     chan struct{}
+	pendingReadCount  int
+	readTriggerCh 	  chan struct{}
 }
 
 func (rf *Raft) Start(command []byte) (int, int, bool) {
@@ -127,6 +131,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	/////////////////////////////////
 	rf.heartbeatInterval = 100 * time.Millisecond
 	rf.roleCh = make(chan RoleEvent, 8)
+	rf.readTriggerCh = make(chan struct{}, 1)
 	rf.readPersist(persister.ReadRaftState())
 	// rf.readSnapshot()
 
