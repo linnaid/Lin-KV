@@ -4,26 +4,96 @@ package pb;
 
 option go_package = "etcd-KV/internal/api/kv/pb";
 
+
+service KV {
+    rpc Put(PutRequest) returns (PutResponse);
+    rpc Get(GetRequest) returns (GetResponse);
+    rpc Delete(DeleteRequest) returns (DeleteResponse);
+
+    // Streaming watch
+    rpc Watch(WatchRequest) returns (stream WatchResponse);
+    
+    rpc LeaseGrant(LeaseGrantRequest) returns (LeaseGrantResponse);
+    rpc LeaseRevoke(LeaseRevokeRequest) returns (LeaseRevokeResponse);
+
+    rpc LeaseKeepAlive(stream LeaseKeepAliveRequest)
+        returns (stream LeaseKeepAliveResponse);
+}
+
 message PutRequest {
     string key = 1;
     bytes value = 2;
     int64 client_id = 3;
     int64 seq = 4;
+    int64 lease_id = 5;
 }
-
 message PutResponse {
     string err = 1;
+    int64 revision = 2;
 }
 
 message GetRequest {
     string key = 1;
     int64 client_id = 2;
     int64 seq = 3;
+    int64 revision = 4;
 }
-
 message GetResponse {
     bytes value = 1;
     string err = 2;
+    int64 revision = 3;
+    bool found = 4;
+}
+
+message DeleteRequest {
+    string key = 1;
+    int64 client_id = 2;
+    int64 seq = 3;
+}
+message DeleteResponse {
+    bool deleted = 1;
+    int64 revision = 2;
+    string err = 3;
+}
+
+enum CompareOp {
+    COMPARE_EQUAL = 0;
+    COMPARE_GREATER = 1;
+    COMPARE_LESS = 2;
+}
+message Compare {
+    string key = 1;
+    CompareOp op = 2;
+    int64 rev = 3;
+}
+
+enum OpType {
+    OP_GET = 0;
+    OP_PUT = 1;
+    OP_DELETE = 2;
+}
+message Op {
+    OpType type = 1;
+    string key = 2;
+    bytes value = 3;
+}
+
+message TxnRequest {
+    repeated Compare compares = 1;
+    repeated Op then_ops = 2;
+    repeated Op else_ops = 3;
+    int64 client_id = 4;
+    int64 seq = 5;
+}
+message KeyValue {
+    string key = 1;
+    bytes value = 2;
+    int64 revision = 3;
+}
+message TxnResponse {
+    bool succeeded = 1;
+    repeated KeyValue results = 2;
+    string err = 3;
 }
 
 message WatchRequest {
@@ -38,6 +108,7 @@ message Event {
     string key = 1;
     bytes value = 2;
     string type = 3;
+    int64 revision = 4;
 }
 
 message WatchResponse {
@@ -46,10 +117,25 @@ message WatchResponse {
     string err = 3;
 }
 
-service KV {
-    rpc Put(PutRequest) returns (PutResponse);
-    rpc Get(GetRequest) returns (GetResponse);
-
-    // Streaming watch
-    rpc Watch(WatchRequest) returns (stream WatchResponse);
+message LeaseGrantRequest {
+    int64 ttl = 1;
+}
+message LeaseGrantResponse {
+    int64 id = 1;
+    int64 ttl = 2;
+    string err = 3;
+}
+message LeaseRevokeRequest {
+    int64 id = 1;
+}
+message LeaseRevokeResponse {
+    string err = 1;
+}
+message LeaseKeepAliveRequest {
+    int64 id = 1;
+}
+message LeaseKeepAliveResponse {
+    int64 id = 1;
+    string err = 2;
+    int64 ttl = 3;
 }
