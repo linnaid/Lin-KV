@@ -1,6 +1,8 @@
 // 日志复制RPC
 package raft
 
+import "etcd-KV/Tools"
+
 // import "etcd-KV/Tools"
 
 
@@ -100,6 +102,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
 	// fmt.Printf("sendAppendEntries函数进入...\n")
-	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
-	return ok
+	// ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
+	err := rf.peers[server].AppendEntries(args, reply)
+	if err != nil {
+		Tools.Debug("sendAppendEntries error", err)
+		return false
+	}
+	return true
 }

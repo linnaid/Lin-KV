@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"etcd-KV/internal/labrpc"
 	"etcd-KV/internal/storage"
 	"etcd-KV/internal/storage/persister"
 )
@@ -20,7 +19,7 @@ type RoleEvent struct {
 
 type Raft struct {
 	mu        sync.Mutex          // Lock to protect shared access to this peer's state
-	peers     []*labrpc.ClientEnd // RPC end points of all peers
+	peers     []Peer // RPC end points of all peers
 	persister persister.Persister   // Object to hold this peer's persisted state
 	me        int                 // this peer's index into peers[]
 	dead      int32               // set by Kill()
@@ -102,7 +101,7 @@ func (rf *Raft) Kill() {
 }
 
 // 初始化
-func Make(peers []*labrpc.ClientEnd, me int,
+func Make(peers []Peer, me int,
 	persister persister.Persister, applyCh chan ApplyMsg) *Raft {
 	rf := &Raft{}
 	rf.peers = peers

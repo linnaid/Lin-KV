@@ -1,6 +1,8 @@
 // 快照存储与加载
 package raft
 
+import "etcd-KV/Tools"
+
 
 func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// fmt.Printf("我要调用这个函数了\n")
@@ -54,8 +56,13 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 
 func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply *InstallSnapshotReply) bool {
 	// fmt.Printf("sendAppendEntries函数进入...\n")
-	ok := rf.peers[server].Call("Raft.InstallSnapshot", args, reply)
-	return ok
+	// ok := rf.peers[server].Call("Raft.InstallSnapshot", args, reply)
+	err := rf.peers[server].InstallSnapshot(args, reply)
+	if err != nil {
+		Tools.Debug("sendInstallSnapshot error ", err)
+		return false
+	}
+	return true
 }
 
 func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) {
