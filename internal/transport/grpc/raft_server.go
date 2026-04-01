@@ -30,9 +30,9 @@ func (s *RaftServer) SetRaft(rf *raft.Raft) {
 }
 
 func (s *RaftServer) GetRaft() (*raft.Raft, error) {
-	s.mu.Lock()
+	s.mu.RLock()
 	rf := s.rf
-	s.mu.Unlock()
+	s.mu.RUnlock()
 
 	if rf == nil {
 		return nil, status.Error(codes.Unavailable, "raft server not ready")

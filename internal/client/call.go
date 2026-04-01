@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func (c *Client) callRPC(method string, req interface{}, reply interface{}) error {
+func (c *Client) callRPC(ctx context.Context, method string, req interface{}, reply interface{}) error {
 	numServers := len(c.servers)
 
 	for {
@@ -18,7 +18,7 @@ func (c *Client) callRPC(method string, req interface{}, reply interface{}) erro
 		for i := 0; i < numServers; i++ {
 			srv := (leader + i) % numServers
 
-			err := c.servers[srv].Call(method, req, reply)
+			err := c.servers[srv].Call(ctx, method, req, reply)
 			if err != nil {
 				c.updateLeader((srv + 1) % numServers)
 				continue
@@ -53,9 +53,9 @@ func (c *Client) updateLeader(leader int) {
 	c.leader = leader
 }
 
-func (c *Client) callOnce(srv int, method string, req interface{}, reply interface{}) bool {
+func (c *Client) callOnce(ctx context.Context, srv int, method string, req interface{}, reply interface{}) bool {
 	// return c.servers[srv].Call(method, req, reply)
-	err := c.servers[srv].Call(method, req, reply)
+	err := c.servers[srv].Call(ctx, method, req, reply)
 	if err != nil {
 		Tools.Debug("callOnce err is: ", err)
 		return false

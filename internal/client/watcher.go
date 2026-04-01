@@ -38,7 +38,7 @@ func (c *Client) watchInternal(ctx context.Context, key string, prefix bool) <-c
 
 				reply := &kv.WatchResponse{}
 
-				ok := c.callOnce(srv, "RPCAdapter.Watch", req, reply)
+				ok := c.callOnce(ctx, srv, "RPCAdapter.Watch", req, reply)
 				if !ok {
 					return ErrRPC
 				}
@@ -164,7 +164,7 @@ func (c *Client) watchStream(ctx context.Context, key string, prefix bool) <-cha
 			// 节点不只一个，目前假定为一个节点
 			deleay := 100 * time.Millisecond
 
-			stream, err := c.servers[0].Stream("RPCAdapter.Watch", req)
+			stream, err := c.servers[0].Stream(ctx, "RPCAdapter.Watch", req)
 			if err != nil {
 				Tools.Debug("RPCAdapter.Watch err not nil in watchStream", err.Error())
 

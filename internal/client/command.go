@@ -84,7 +84,7 @@ func (c *Client) Put(ctx context.Context, key string, value []byte) error {
 
 		reply := &kv.PutResponse{}
 
-		ok := c.callOnce(srv, "RPCAdapter.Put", req, reply)
+		ok := c.callOnce(ctx, srv, "RPCAdapter.Put", req, reply)
 		if !ok {
 			return ErrRPC
 		}
@@ -106,7 +106,7 @@ func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
 
 		reply := &kv.GetResponse{}
 
-		ok := c.callOnce(srv, "RPCAdapter.Get", req, reply)
+		ok := c.callOnce(ctx, srv, "RPCAdapter.Get", req, reply)
 		if !ok {
 			return ErrRPC
 		}

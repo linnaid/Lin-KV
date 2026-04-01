@@ -41,7 +41,7 @@ func (t *Txn) Commit(ctx context.Context) (*kv.TxnResult, error) {
 	err := t.client.callWithRetry(ctx, func(srv int) error {
 		reply := &kv.TxnResponse{}
 
-		ok := t.client.callOnce(srv, "RPCAdapter.Txn", req, reply)
+		ok := t.client.callOnce(ctx, srv, "RPCAdapter.Txn", req, reply)
 		if !ok {
 			return ErrRPC
 		}

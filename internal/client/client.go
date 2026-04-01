@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"etcd-KV/internal/api/kv/model"
 	"sync/atomic"
@@ -44,6 +45,7 @@ func (c *Client) callPut(i int, req *kv.PutRequest) (*kv.PutResponse, error) {
 	// 	return nil, ErrRPC
 	// }
 	err := c.servers[i].Call(
+		context.Background(),
 		"RPCAdapter.Put",
 		req,
 		reply,
