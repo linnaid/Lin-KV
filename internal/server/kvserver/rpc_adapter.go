@@ -2,8 +2,13 @@ package kvserver
 
 import (
 	"context"
+	"errors"
 	"etcd-KV/Tools"
 	"etcd-KV/internal/api/kv/pb"
+	"etcd-KV/internal/storage/mvcc"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type RPCAdapter struct {
@@ -62,7 +67,12 @@ func (r *RPCAdapter) Watch(req *pb.WatchRequest,
 	mvcc_ch, id, err := r.server.store.Watch(req.Key, req.Revision, req.Prefix)
 	if err != nil {
 		Tools.Debug("rpc_Adapter Watch error", err.Error())
-		return err
+
+		if errors.Is(err, mvcc.ErrCompacted) {
+			return status.Error(codes.FailedPrecondition, err.Error())
+		}
+
+		return status.Error(codes.Internal, err.Error())
 	}
 
 	ch := convert(mvcc_ch)

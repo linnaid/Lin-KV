@@ -5,143 +5,18 @@ import (
 	"etcd-KV/Tools"
 	"etcd-KV/internal/api/kv/model"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
-
-func (c *Client) watchInternal(ctx context.Context, key string, prefix bool) <-chan *kv.Event {
-	ch := make(chan *kv.Event, 100)
-
-	go func() {
-		defer close(ch)
-
-		var rev int64 = 0
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-
-			seq := c.getSeq()
-
-			var newRev int64
-			var events []*kv.Event
-
-			err := c.callWithRetry(ctx, func(srv int) error {
-				req := &kv.WatchRequest{
-					Key:      key,
-					Revision: rev,
-					ClientID: c.clientID,
-					Prefix:   prefix,
-					Seq:      seq,
-				}
-
-				reply := &kv.WatchResponse{}
-
-				ok := c.callOnce(ctx, srv, "RPCAdapter.Watch", req, reply)
-				if !ok {
-					return ErrRPC
-				}
-
-				err := parseErr(reply.Err)
-				if err != nil {
-					return err
-				}
-
-				events = reply.Events
-				newRev = reply.Revision
-
-				return nil
-			})
-
-			if err != nil {
-
-				// if err == context.Canceled || err == context.DeadlineExceeded {
-				// 	Tools.Error("err == context.Canceled || DeadlineExceded.", err)
-				// 	return
-				// }
-				if ctx.Err() != nil {
-					Tools.Error("err == context.Canceled || DeadlineExceded.", err)
-					return
-				}
-
-				Tools.Debug("Watch callWithRetry is not nil", err.Error())
-				continue
-			}
-
-			rev = newRev
-
-			for _, ev := range events {
-				select {
-				case ch <- ev:
-				case <-ctx.Done():
-					return
-				}
-			}
-
-			delay := 50 * time.Millisecond
-
-			if len(events) == 0 {
-				delay = 100 * time.Millisecond
-			}
-			select {
-			case <-time.After(delay):
-			case <-ctx.Done():
-				return
-			}
-
-		}
-	}()
-	return ch
-}
 
 // /////////////////////////////////////////////////
 func (c *Client) Watch(ctx context.Context, key string) <-chan *kv.Event {
-	ch := make(chan *kv.Event, 100)
-
-	go func() {
-		defer close(ch)
-
-		streamCh := c.watchStream(ctx, key, false)
-
-		select {
-		case ev, ok := <-streamCh:
-			if !ok {
-				// 因为 streaming失败，所以fallback
-				for ev := range c.watchInternal(ctx, key, false) {
-					select {
-					case ch <- ev:
-					case <-ctx.Done():
-						return
-					}
-				}
-				return
-			}
-
-			select {
-			case ch <- ev:
-			case <-ctx.Done():
-				return
-			}
-
-			for ev := range streamCh {
-				select {
-				case ch <- ev:
-				case <-ctx.Done():
-					return
-				}
-			}
-
-		case <-ctx.Done():
-			return
-		}
-	}()
-
-	return ch
+	return  c.watchStream(ctx, key, false)
 }
 
 func (c *Client) WatchPrefix(ctx context.Context, prefix string) <-chan *kv.Event {
-	return c.watchInternal(ctx, prefix, true)
+	return c.watchStream(ctx, prefix, true)
 }
 
 // 后面要改成leader routing
@@ -151,44 +26,59 @@ func (c *Client) watchStream(ctx context.Context, key string, prefix bool) <-cha
 	go func() {
 		defer close(ch)
 
-		var rev int64 = 0
+		// var rev int64 = 0
+		rev := int64(1)
+		backoff := 100 * time.Millisecond
 
 		for {
+
+			select {
+			case <-ctx.Done():
+				return 
+			default:
+			}
+
 			req := &kv.WatchRequest{
 				Key:      key,
 				Prefix:   prefix,
 				ClientID: c.clientID,
 				Revision: rev,
+				Seq: 	  c.getSeq(),
 			}
 
-			// 节点不只一个，目前假定为一个节点
-			deleay := 100 * time.Millisecond
-
-			stream, err := c.servers[0].Stream(ctx, "RPCAdapter.Watch", req)
+			stream, err := c.openWatchStream(ctx, req)
 			if err != nil {
+				if ctx.Err() != nil {
+					return 
+				}
+				if isWatchCompacted(err) {
+					Tools.Error("watch revision compacted", err)
+
+					return 
+				}
 				Tools.Debug("RPCAdapter.Watch err not nil in watchStream", err.Error())
 
 				select {
-				case <-time.After(deleay):
-					if deleay < time.Second {
-						deleay *= 2
-					}
-					continue
+				case <-time.After(backoff):
 				case <-ctx.Done():
 					return
 				}
+				if backoff < time.Second {
+					backoff *= 2
+				}
+				continue
 			}
-			deleay = 100 * time.Millisecond
+			backoff = 100 * time.Millisecond
 
 			// defer stream.Close()
 
 			for {
-				select {
-				case <-ctx.Done():
-					stream.Close()
-					return
-				default:
-				}
+				// select {
+				// case <-ctx.Done():
+				// 	stream.Close()
+				// 	return
+				// default:
+				// }
 
 				var resp kv.WatchResponse
 
@@ -198,18 +88,35 @@ func (c *Client) watchStream(ctx context.Context, key string, prefix bool) <-cha
 						Tools.Debug("ctx.Err != nil in watchStream", ctx.Err().Error())
 						return
 					}
+					if isWatchCompacted(err) {
+						Tools.Error("watch revision compacted in watchStream", err)
+						return 
+					}
 
 					Tools.Debug("stream.recv err not nil in watchStream", err)
-					stream.Close()
 					break
 				}
 
-				rev = resp.Revision
+				if resp.Err != "" {
+					_ = stream.Close()
+					Tools.Debug("watch response err not empty in watchStream", resp.Err)
+
+					break
+				}
+
+				if resp.Revision >= rev {
+					rev = resp.Revision + 1
+				}
 
 				for _, ev := range resp.Events {
+					if ev != nil && ev.Rev >= rev {
+						rev = ev.Rev + 1
+					}
+
 					select {
 					case ch <- ev:
 					case <-ctx.Done():
+						_ = stream.Close()
 						return
 					}
 				}
@@ -218,4 +125,33 @@ func (c *Client) watchStream(ctx context.Context, key string, prefix bool) <-cha
 	}()
 
 	return ch
+}
+
+func (c * Client) openWatchStream(ctx context.Context, 
+	req *kv.WatchRequest) (RPCStream, error) {
+		c.mu.Lock()
+		leader := c.leader
+		c.mu.Unlock()
+
+		var lastErr error
+		for i := 0; i < len(c.servers); i++ {
+			srv := (leader + i) % len(c.servers)
+
+			stream, err := c.servers[srv].Stream(ctx, "RPCAdapter.Watch", req)
+			if err == nil {
+				c.updateLeader(srv)
+				return stream, nil
+			}
+			lastErr = err
+		}
+
+		if lastErr == nil {
+			lastErr = ErrRPC
+			Tools.Debug("openWatchStream error", "lastErr is nil, set to ErrRPC")
+		}
+		return nil, lastErr
+	}
+
+func isWatchCompacted(err error) bool {
+	return status.Code(err) == codes.FailedPrecondition
 }

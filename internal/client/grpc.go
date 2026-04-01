@@ -18,7 +18,8 @@ func NewGrpcClient(conn *grpc.ClientConn) *GrpcClient {
 	}
 }
 
-func (c *GrpcClient) Call(ctx context.Context, method string, req interface{}, resp interface{}) error {
+func (c *GrpcClient) Call(ctx context.Context, method string, 
+	req interface{}, resp interface{}) error {
 	switch method {
 
 	case "RPCAdapter.Get":
@@ -64,19 +65,23 @@ func (c *GrpcClient) Call(ctx context.Context, method string, req interface{}, r
 
 // 谁实现了KV proto的函数？
 
-func (c *GrpcClient) Stream(ctx context.Context, method string, req interface{}) (RPCStream, error) {
+func (c *GrpcClient) Stream(ctx context.Context, method string, 
+	req interface{}) (RPCStream, error) {
 	switch method {
 
 	case "RPCAdapter.Watch":
 		r := toPBWatchRequest(req.(*kv.WatchRequest))
 
-		stream, err := c.cli.Watch(ctx, r)
+		streamCtx, cancel := context.WithCancel(ctx)
+		stream, err := c.cli.Watch(streamCtx, r)
 		if err != nil {
+			cancel()
 			return nil, err
 		}
 
 		return &GrpcStream{
 			stream: stream,
+			cancel: cancel,
 		}, nil
 
 	default:
@@ -97,5 +102,8 @@ func (s *GrpcStream) Recv(resp interface{}) error {
 }
 
 func (s *GrpcStream) Close() error {
+	if s.cancel != nil {
+		s.cancel()
+	}
 	return nil
 }

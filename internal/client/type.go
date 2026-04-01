@@ -48,4 +48,5 @@ type GrpcClient struct {
 
 type GrpcStream struct {
 	stream   pb.KV_WatchClient
+	cancel   context.CancelFunc
 }
