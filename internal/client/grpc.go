@@ -9,17 +9,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-func (c *LabrpcClient) Call(method string, req interface{}, reply interface{}) error {
-	ok := c.end.Call(method, req, reply)
-	if !ok {
-		return fmt.Errorf("rpc call failed: %s", method)
-	}
-	return nil
-}
-
-func (c *LabrpcClient) Stream(method string, req interface{}) (RPCStream, error) {
-	return nil, fmt.Errorf("Stream not supported in labrpc")
-}
 
 func NewGrpcClient(conn *grpc.ClientConn) *GrpcClient {
 	cli := pb.NewKVClient(conn)
@@ -29,14 +18,14 @@ func NewGrpcClient(conn *grpc.ClientConn) *GrpcClient {
 	}
 }
 
-func (c *GrpcClient) Call(method string, req interface{}, resp interface{}) error {
+func (c *GrpcClient) Call(ctx context.Context, method string, req interface{}, resp interface{}) error {
 	switch method {
 
 	case "RPCAdapter.Get":
 		r := toPBGetRequest(req.(*kv.GetRequest))
 		rep := resp.(*kv.GetResponse)
 
-		res, err := c.cli.Get(context.Background(), r)
+		res, err := c.cli.Get(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -48,7 +37,7 @@ func (c *GrpcClient) Call(method string, req interface{}, resp interface{}) erro
 		r := toPBPutRequest(req.(*kv.PutRequest))
 		rep := resp.(*kv.PutResponse)
 
-		res, err := c.cli.Put(context.Background(), r)
+		res, err := c.cli.Put(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -60,7 +49,7 @@ func (c *GrpcClient) Call(method string, req interface{}, resp interface{}) erro
 		r := toPBDeleteRequest(req.(*kv.DeleteRequest))
 		rep := resp.(*kv.DeleteResponse)
 
-		res, err := c.cli.Delete(context.Background(), r)
+		res, err := c.cli.Delete(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -75,13 +64,13 @@ func (c *GrpcClient) Call(method string, req interface{}, resp interface{}) erro
 
 // 谁实现了KV proto的函数？
 
-func (c *GrpcClient) Stream(method string, req interface{}) (RPCStream, error) {
+func (c *GrpcClient) Stream(ctx context.Context, method string, req interface{}) (RPCStream, error) {
 	switch method {
 
 	case "RPCAdapter.Watch":
 		r := toPBWatchRequest(req.(*kv.WatchRequest))
 
-		stream, err := c.cli.Watch(context.Background(), r)
+		stream, err := c.cli.Watch(ctx, r)
 		if err != nil {
 			return nil, err
 		}

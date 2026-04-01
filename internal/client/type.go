@@ -1,9 +1,9 @@
 package client
 
 import (
+	"context"
 	"etcd-KV/internal/api/kv/model"
 	"etcd-KV/internal/api/kv/pb"
-	"etcd-KV/internal/labrpc"
 	"sync"
 
 	"google.golang.org/grpc"
@@ -14,7 +14,6 @@ var globalClientID int64
 type Client struct {
 	mu 			sync.Mutex
 
-	// servers []*labrpc.ClientEnd
 	servers		[]RPCClient
 	leader 		int
 	clientID 	int64
@@ -34,17 +33,13 @@ type RPCStream interface {
 }
 
 type RPCClient interface{
-	Call(method string, req interface{}, resp interface{}) error
+	Call(ctx context.Context, method string, req interface{}, resp interface{}) error
 
 	// streaming
-	Stream(method string, req interface{}) (RPCStream, error)
+	Stream(ctx context.Context, method string, req interface{}) (RPCStream, error)
 }
 
 type rpcFunc func(srv int) error
-
-type LabrpcClient struct {
-	end *labrpc.ClientEnd
-}
 
 type GrpcClient struct {
 	cli		 pb.KVClient
