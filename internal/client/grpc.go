@@ -2,12 +2,12 @@ package client
 
 import (
 	"context"
+	kv "etcd-KV/internal/api/kv/model"
 	"etcd-KV/internal/api/kv/pb"
 	"fmt"
 
 	"google.golang.org/grpc"
 )
-
 
 func (c *LabrpcClient) Call(method string, req interface{}, reply interface{}) error {
 	ok := c.end.Call(method, req, reply)
@@ -24,7 +24,8 @@ func (c *LabrpcClient) Stream(method string, req interface{}) (RPCStream, error)
 func NewGrpcClient(conn *grpc.ClientConn) *GrpcClient {
 	cli := pb.NewKVClient(conn)
 	return &GrpcClient{
-		cli: cli,
+		cli:  cli,
+		conn: conn,
 	}
 }
 
@@ -32,45 +33,53 @@ func (c *GrpcClient) Call(method string, req interface{}, resp interface{}) erro
 	switch method {
 
 	case "RPCAdapter.Get":
-		// 1. 类型断言
-		r := req.(*pb.GetRequest)
-		rep := resp.(*pb.GetResponse)
+		r := toPBGetRequest(req.(*kv.GetRequest))
+		rep := resp.(*kv.GetResponse)
 
-		// 2. 调用rpc
 		res, err := c.cli.Get(context.Background(), r)
 		if err != nil {
 			return err
 		}
 
-		rep.Err = res.Err
-		rep.Value = res.Value
-
+		fillGetResponseFromPB(rep, res)
 		return nil
 
 	case "RPCAdapter.Put":
-		r := req.(*pb.PutRequest)
-		rep := resp.(*pb.PutResponse)
+		r := toPBPutRequest(req.(*kv.PutRequest))
+		rep := resp.(*kv.PutResponse)
 
 		res, err := c.cli.Put(context.Background(), r)
 		if err != nil {
 			return err
 		}
 
-		rep.Err = res.Err
-		
+		fillPutResponseFromPB(rep, res)
 		return nil
-		
+
+	case "RPCAdapter.Delete":
+		r := toPBDeleteRequest(req.(*kv.DeleteRequest))
+		rep := resp.(*kv.DeleteResponse)
+
+		res, err := c.cli.Delete(context.Background(), r)
+		if err != nil {
+			return err
+		}
+
+		fillDeleteResponseFromPB(rep, res)
+		return nil
+
 	default:
 		return fmt.Errorf("Unknown method %s", method)
 	}
 }
+
 // 谁实现了KV proto的函数？
 
 func (c *GrpcClient) Stream(method string, req interface{}) (RPCStream, error) {
 	switch method {
-		
+
 	case "RPCAdapter.Watch":
-		r := req.(*pb.WatchRequest)
+		r := toPBWatchRequest(req.(*kv.WatchRequest))
 
 		stream, err := c.cli.Watch(context.Background(), r)
 		if err != nil {
@@ -92,14 +101,12 @@ func (s *GrpcStream) Recv(resp interface{}) error {
 		return err
 	}
 
-	r := resp.(*pb.WatchResponse)
-	r.Err = res.Err
-	r.Events = res.Events
-	r.Revision = res.Revision
+	r := resp.(*kv.WatchResponse)
+	fillWatchResponseFromPB(r, res)
 
 	return nil
 }
 
 func (s *GrpcStream) Close() error {
-	return  nil
+	return nil
 }

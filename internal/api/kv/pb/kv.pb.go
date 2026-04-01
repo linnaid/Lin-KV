@@ -21,12 +21,111 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type CompareOp int32
+
+const (
+	CompareOp_COMPARE_EQUAL   CompareOp = 0
+	CompareOp_COMPARE_GREATER CompareOp = 1
+	CompareOp_COMPARE_LESS    CompareOp = 2
+)
+
+// Enum value maps for CompareOp.
+var (
+	CompareOp_name = map[int32]string{
+		0: "COMPARE_EQUAL",
+		1: "COMPARE_GREATER",
+		2: "COMPARE_LESS",
+	}
+	CompareOp_value = map[string]int32{
+		"COMPARE_EQUAL":   0,
+		"COMPARE_GREATER": 1,
+		"COMPARE_LESS":    2,
+	}
+)
+
+func (x CompareOp) Enum() *CompareOp {
+	p := new(CompareOp)
+	*p = x
+	return p
+}
+
+func (x CompareOp) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (CompareOp) Descriptor() protoreflect.EnumDescriptor {
+	return file_kv_proto_enumTypes[0].Descriptor()
+}
+
+func (CompareOp) Type() protoreflect.EnumType {
+	return &file_kv_proto_enumTypes[0]
+}
+
+func (x CompareOp) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use CompareOp.Descriptor instead.
+func (CompareOp) EnumDescriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{0}
+}
+
+type OpType int32
+
+const (
+	OpType_OP_GET    OpType = 0
+	OpType_OP_PUT    OpType = 1
+	OpType_OP_DELETE OpType = 2
+)
+
+// Enum value maps for OpType.
+var (
+	OpType_name = map[int32]string{
+		0: "OP_GET",
+		1: "OP_PUT",
+		2: "OP_DELETE",
+	}
+	OpType_value = map[string]int32{
+		"OP_GET":    0,
+		"OP_PUT":    1,
+		"OP_DELETE": 2,
+	}
+)
+
+func (x OpType) Enum() *OpType {
+	p := new(OpType)
+	*p = x
+	return p
+}
+
+func (x OpType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (OpType) Descriptor() protoreflect.EnumDescriptor {
+	return file_kv_proto_enumTypes[1].Descriptor()
+}
+
+func (OpType) Type() protoreflect.EnumType {
+	return &file_kv_proto_enumTypes[1]
+}
+
+func (x OpType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use OpType.Descriptor instead.
+func (OpType) EnumDescriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{1}
+}
+
 type PutRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	Value         []byte                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	ClientId      int64                  `protobuf:"varint,3,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
 	Seq           int64                  `protobuf:"varint,4,opt,name=seq,proto3" json:"seq,omitempty"`
+	LeaseId       int64                  `protobuf:"varint,5,opt,name=lease_id,json=leaseId,proto3" json:"lease_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -89,9 +188,17 @@ func (x *PutRequest) GetSeq() int64 {
 	return 0
 }
 
+func (x *PutRequest) GetLeaseId() int64 {
+	if x != nil {
+		return x.LeaseId
+	}
+	return 0
+}
+
 type PutResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Err           string                 `protobuf:"bytes,1,opt,name=err,proto3" json:"err,omitempty"`
+	Revision      int64                  `protobuf:"varint,2,opt,name=revision,proto3" json:"revision,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -133,11 +240,19 @@ func (x *PutResponse) GetErr() string {
 	return ""
 }
 
+func (x *PutResponse) GetRevision() int64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
 type GetRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	ClientId      int64                  `protobuf:"varint,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
 	Seq           int64                  `protobuf:"varint,3,opt,name=seq,proto3" json:"seq,omitempty"`
+	Revision      int64                  `protobuf:"varint,4,opt,name=revision,proto3" json:"revision,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -193,10 +308,19 @@ func (x *GetRequest) GetSeq() int64 {
 	return 0
 }
 
+func (x *GetRequest) GetRevision() int64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
 type GetResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Value         []byte                 `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
 	Err           string                 `protobuf:"bytes,2,opt,name=err,proto3" json:"err,omitempty"`
+	Revision      int64                  `protobuf:"varint,3,opt,name=revision,proto3" json:"revision,omitempty"`
+	Found         bool                   `protobuf:"varint,4,opt,name=found,proto3" json:"found,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -245,6 +369,464 @@ func (x *GetResponse) GetErr() string {
 	return ""
 }
 
+func (x *GetResponse) GetRevision() int64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *GetResponse) GetFound() bool {
+	if x != nil {
+		return x.Found
+	}
+	return false
+}
+
+type DeleteRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	ClientId      int64                  `protobuf:"varint,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	Seq           int64                  `protobuf:"varint,3,opt,name=seq,proto3" json:"seq,omitempty"`
+	LeaseId       int64                  `protobuf:"varint,4,opt,name=lease_id,json=leaseId,proto3" json:"lease_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteRequest) Reset() {
+	*x = DeleteRequest{}
+	mi := &file_kv_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteRequest) ProtoMessage() {}
+
+func (x *DeleteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteRequest.ProtoReflect.Descriptor instead.
+func (*DeleteRequest) Descriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *DeleteRequest) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *DeleteRequest) GetClientId() int64 {
+	if x != nil {
+		return x.ClientId
+	}
+	return 0
+}
+
+func (x *DeleteRequest) GetSeq() int64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *DeleteRequest) GetLeaseId() int64 {
+	if x != nil {
+		return x.LeaseId
+	}
+	return 0
+}
+
+type DeleteResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Deleted       bool                   `protobuf:"varint,1,opt,name=deleted,proto3" json:"deleted,omitempty"`
+	Revision      int64                  `protobuf:"varint,2,opt,name=revision,proto3" json:"revision,omitempty"`
+	Err           string                 `protobuf:"bytes,3,opt,name=err,proto3" json:"err,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteResponse) Reset() {
+	*x = DeleteResponse{}
+	mi := &file_kv_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteResponse) ProtoMessage() {}
+
+func (x *DeleteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteResponse.ProtoReflect.Descriptor instead.
+func (*DeleteResponse) Descriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *DeleteResponse) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
+}
+
+func (x *DeleteResponse) GetRevision() int64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *DeleteResponse) GetErr() string {
+	if x != nil {
+		return x.Err
+	}
+	return ""
+}
+
+type Compare struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Op            CompareOp              `protobuf:"varint,2,opt,name=op,proto3,enum=pb.CompareOp" json:"op,omitempty"`
+	Rev           int64                  `protobuf:"varint,3,opt,name=rev,proto3" json:"rev,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Compare) Reset() {
+	*x = Compare{}
+	mi := &file_kv_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Compare) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Compare) ProtoMessage() {}
+
+func (x *Compare) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Compare.ProtoReflect.Descriptor instead.
+func (*Compare) Descriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *Compare) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *Compare) GetOp() CompareOp {
+	if x != nil {
+		return x.Op
+	}
+	return CompareOp_COMPARE_EQUAL
+}
+
+func (x *Compare) GetRev() int64 {
+	if x != nil {
+		return x.Rev
+	}
+	return 0
+}
+
+type Op struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Type          OpType                 `protobuf:"varint,1,opt,name=type,proto3,enum=pb.OpType" json:"type,omitempty"`
+	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	Value         []byte                 `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Op) Reset() {
+	*x = Op{}
+	mi := &file_kv_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Op) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Op) ProtoMessage() {}
+
+func (x *Op) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Op.ProtoReflect.Descriptor instead.
+func (*Op) Descriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *Op) GetType() OpType {
+	if x != nil {
+		return x.Type
+	}
+	return OpType_OP_GET
+}
+
+func (x *Op) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *Op) GetValue() []byte {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+type TxnRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Compares      []*Compare             `protobuf:"bytes,1,rep,name=compares,proto3" json:"compares,omitempty"`
+	ThenOps       []*Op                  `protobuf:"bytes,2,rep,name=then_ops,json=thenOps,proto3" json:"then_ops,omitempty"`
+	ElseOps       []*Op                  `protobuf:"bytes,3,rep,name=else_ops,json=elseOps,proto3" json:"else_ops,omitempty"`
+	ClientId      int64                  `protobuf:"varint,4,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	Seq           int64                  `protobuf:"varint,5,opt,name=seq,proto3" json:"seq,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TxnRequest) Reset() {
+	*x = TxnRequest{}
+	mi := &file_kv_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TxnRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TxnRequest) ProtoMessage() {}
+
+func (x *TxnRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TxnRequest.ProtoReflect.Descriptor instead.
+func (*TxnRequest) Descriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *TxnRequest) GetCompares() []*Compare {
+	if x != nil {
+		return x.Compares
+	}
+	return nil
+}
+
+func (x *TxnRequest) GetThenOps() []*Op {
+	if x != nil {
+		return x.ThenOps
+	}
+	return nil
+}
+
+func (x *TxnRequest) GetElseOps() []*Op {
+	if x != nil {
+		return x.ElseOps
+	}
+	return nil
+}
+
+func (x *TxnRequest) GetClientId() int64 {
+	if x != nil {
+		return x.ClientId
+	}
+	return 0
+}
+
+func (x *TxnRequest) GetSeq() int64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+type KeyValue struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Value         []byte                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	Revision      int64                  `protobuf:"varint,3,opt,name=revision,proto3" json:"revision,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KeyValue) Reset() {
+	*x = KeyValue{}
+	mi := &file_kv_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KeyValue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KeyValue) ProtoMessage() {}
+
+func (x *KeyValue) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KeyValue.ProtoReflect.Descriptor instead.
+func (*KeyValue) Descriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *KeyValue) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *KeyValue) GetValue() []byte {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+func (x *KeyValue) GetRevision() int64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+type TxnResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Succeeded     bool                   `protobuf:"varint,1,opt,name=succeeded,proto3" json:"succeeded,omitempty"`
+	Results       []*KeyValue            `protobuf:"bytes,2,rep,name=results,proto3" json:"results,omitempty"`
+	Err           string                 `protobuf:"bytes,3,opt,name=err,proto3" json:"err,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TxnResponse) Reset() {
+	*x = TxnResponse{}
+	mi := &file_kv_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TxnResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TxnResponse) ProtoMessage() {}
+
+func (x *TxnResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TxnResponse.ProtoReflect.Descriptor instead.
+func (*TxnResponse) Descriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *TxnResponse) GetSucceeded() bool {
+	if x != nil {
+		return x.Succeeded
+	}
+	return false
+}
+
+func (x *TxnResponse) GetResults() []*KeyValue {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
+func (x *TxnResponse) GetErr() string {
+	if x != nil {
+		return x.Err
+	}
+	return ""
+}
+
 type WatchRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
@@ -258,7 +840,7 @@ type WatchRequest struct {
 
 func (x *WatchRequest) Reset() {
 	*x = WatchRequest{}
-	mi := &file_kv_proto_msgTypes[4]
+	mi := &file_kv_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -270,7 +852,7 @@ func (x *WatchRequest) String() string {
 func (*WatchRequest) ProtoMessage() {}
 
 func (x *WatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kv_proto_msgTypes[4]
+	mi := &file_kv_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -283,7 +865,7 @@ func (x *WatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchRequest.ProtoReflect.Descriptor instead.
 func (*WatchRequest) Descriptor() ([]byte, []int) {
-	return file_kv_proto_rawDescGZIP(), []int{4}
+	return file_kv_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *WatchRequest) GetKey() string {
@@ -326,13 +908,14 @@ type Event struct {
 	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	Value         []byte                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	Type          string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
+	Revision      int64                  `protobuf:"varint,4,opt,name=revision,proto3" json:"revision,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_kv_proto_msgTypes[5]
+	mi := &file_kv_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -344,7 +927,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_kv_proto_msgTypes[5]
+	mi := &file_kv_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -357,7 +940,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_kv_proto_rawDescGZIP(), []int{5}
+	return file_kv_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *Event) GetKey() string {
@@ -381,6 +964,13 @@ func (x *Event) GetType() string {
 	return ""
 }
 
+func (x *Event) GetRevision() int64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
 type WatchResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Events        []*Event               `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
@@ -392,7 +982,7 @@ type WatchResponse struct {
 
 func (x *WatchResponse) Reset() {
 	*x = WatchResponse{}
-	mi := &file_kv_proto_msgTypes[6]
+	mi := &file_kv_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -404,7 +994,7 @@ func (x *WatchResponse) String() string {
 func (*WatchResponse) ProtoMessage() {}
 
 func (x *WatchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kv_proto_msgTypes[6]
+	mi := &file_kv_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -417,7 +1007,7 @@ func (x *WatchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchResponse.ProtoReflect.Descriptor instead.
 func (*WatchResponse) Descriptor() ([]byte, []int) {
-	return file_kv_proto_rawDescGZIP(), []int{6}
+	return file_kv_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *WatchResponse) GetEvents() []*Event {
@@ -441,45 +1031,411 @@ func (x *WatchResponse) GetErr() string {
 	return ""
 }
 
+type LeaseGrantRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ttl           int64                  `protobuf:"varint,1,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeaseGrantRequest) Reset() {
+	*x = LeaseGrantRequest{}
+	mi := &file_kv_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaseGrantRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaseGrantRequest) ProtoMessage() {}
+
+func (x *LeaseGrantRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaseGrantRequest.ProtoReflect.Descriptor instead.
+func (*LeaseGrantRequest) Descriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *LeaseGrantRequest) GetTtl() int64 {
+	if x != nil {
+		return x.Ttl
+	}
+	return 0
+}
+
+type LeaseGrantResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Ttl           int64                  `protobuf:"varint,2,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	Err           string                 `protobuf:"bytes,3,opt,name=err,proto3" json:"err,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeaseGrantResponse) Reset() {
+	*x = LeaseGrantResponse{}
+	mi := &file_kv_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaseGrantResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaseGrantResponse) ProtoMessage() {}
+
+func (x *LeaseGrantResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaseGrantResponse.ProtoReflect.Descriptor instead.
+func (*LeaseGrantResponse) Descriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *LeaseGrantResponse) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *LeaseGrantResponse) GetTtl() int64 {
+	if x != nil {
+		return x.Ttl
+	}
+	return 0
+}
+
+func (x *LeaseGrantResponse) GetErr() string {
+	if x != nil {
+		return x.Err
+	}
+	return ""
+}
+
+type LeaseRevokeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeaseRevokeRequest) Reset() {
+	*x = LeaseRevokeRequest{}
+	mi := &file_kv_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaseRevokeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaseRevokeRequest) ProtoMessage() {}
+
+func (x *LeaseRevokeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaseRevokeRequest.ProtoReflect.Descriptor instead.
+func (*LeaseRevokeRequest) Descriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *LeaseRevokeRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type LeaseRevokeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Err           string                 `protobuf:"bytes,1,opt,name=err,proto3" json:"err,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeaseRevokeResponse) Reset() {
+	*x = LeaseRevokeResponse{}
+	mi := &file_kv_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaseRevokeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaseRevokeResponse) ProtoMessage() {}
+
+func (x *LeaseRevokeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaseRevokeResponse.ProtoReflect.Descriptor instead.
+func (*LeaseRevokeResponse) Descriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *LeaseRevokeResponse) GetErr() string {
+	if x != nil {
+		return x.Err
+	}
+	return ""
+}
+
+type LeaseKeepAliveRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeaseKeepAliveRequest) Reset() {
+	*x = LeaseKeepAliveRequest{}
+	mi := &file_kv_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaseKeepAliveRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaseKeepAliveRequest) ProtoMessage() {}
+
+func (x *LeaseKeepAliveRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaseKeepAliveRequest.ProtoReflect.Descriptor instead.
+func (*LeaseKeepAliveRequest) Descriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *LeaseKeepAliveRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type LeaseKeepAliveResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Err           string                 `protobuf:"bytes,2,opt,name=err,proto3" json:"err,omitempty"`
+	Ttl           int64                  `protobuf:"varint,3,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeaseKeepAliveResponse) Reset() {
+	*x = LeaseKeepAliveResponse{}
+	mi := &file_kv_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaseKeepAliveResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaseKeepAliveResponse) ProtoMessage() {}
+
+func (x *LeaseKeepAliveResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaseKeepAliveResponse.ProtoReflect.Descriptor instead.
+func (*LeaseKeepAliveResponse) Descriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *LeaseKeepAliveResponse) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *LeaseKeepAliveResponse) GetErr() string {
+	if x != nil {
+		return x.Err
+	}
+	return ""
+}
+
+func (x *LeaseKeepAliveResponse) GetTtl() int64 {
+	if x != nil {
+		return x.Ttl
+	}
+	return 0
+}
+
 var File_kv_proto protoreflect.FileDescriptor
 
 const file_kv_proto_rawDesc = "" +
 	"\n" +
-	"\bkv.proto\x12\x02kv\"c\n" +
+	"\bkv.proto\x12\x02pb\"~\n" +
 	"\n" +
 	"PutRequest\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\fR\x05value\x12\x1b\n" +
 	"\tclient_id\x18\x03 \x01(\x03R\bclientId\x12\x10\n" +
-	"\x03seq\x18\x04 \x01(\x03R\x03seq\"\x1f\n" +
+	"\x03seq\x18\x04 \x01(\x03R\x03seq\x12\x19\n" +
+	"\blease_id\x18\x05 \x01(\x03R\aleaseId\";\n" +
 	"\vPutResponse\x12\x10\n" +
-	"\x03err\x18\x01 \x01(\tR\x03err\"M\n" +
+	"\x03err\x18\x01 \x01(\tR\x03err\x12\x1a\n" +
+	"\brevision\x18\x02 \x01(\x03R\brevision\"i\n" +
 	"\n" +
 	"GetRequest\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x1b\n" +
 	"\tclient_id\x18\x02 \x01(\x03R\bclientId\x12\x10\n" +
-	"\x03seq\x18\x03 \x01(\x03R\x03seq\"5\n" +
+	"\x03seq\x18\x03 \x01(\x03R\x03seq\x12\x1a\n" +
+	"\brevision\x18\x04 \x01(\x03R\brevision\"g\n" +
 	"\vGetResponse\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\fR\x05value\x12\x10\n" +
-	"\x03err\x18\x02 \x01(\tR\x03err\"\x83\x01\n" +
+	"\x03err\x18\x02 \x01(\tR\x03err\x12\x1a\n" +
+	"\brevision\x18\x03 \x01(\x03R\brevision\x12\x14\n" +
+	"\x05found\x18\x04 \x01(\bR\x05found\"k\n" +
+	"\rDeleteRequest\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x1b\n" +
+	"\tclient_id\x18\x02 \x01(\x03R\bclientId\x12\x10\n" +
+	"\x03seq\x18\x03 \x01(\x03R\x03seq\x12\x19\n" +
+	"\blease_id\x18\x04 \x01(\x03R\aleaseId\"X\n" +
+	"\x0eDeleteResponse\x12\x18\n" +
+	"\adeleted\x18\x01 \x01(\bR\adeleted\x12\x1a\n" +
+	"\brevision\x18\x02 \x01(\x03R\brevision\x12\x10\n" +
+	"\x03err\x18\x03 \x01(\tR\x03err\"L\n" +
+	"\aCompare\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x1d\n" +
+	"\x02op\x18\x02 \x01(\x0e2\r.pb.CompareOpR\x02op\x12\x10\n" +
+	"\x03rev\x18\x03 \x01(\x03R\x03rev\"L\n" +
+	"\x02Op\x12\x1e\n" +
+	"\x04type\x18\x01 \x01(\x0e2\n" +
+	".pb.OpTypeR\x04type\x12\x10\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x03 \x01(\fR\x05value\"\xaa\x01\n" +
+	"\n" +
+	"TxnRequest\x12'\n" +
+	"\bcompares\x18\x01 \x03(\v2\v.pb.CompareR\bcompares\x12!\n" +
+	"\bthen_ops\x18\x02 \x03(\v2\x06.pb.OpR\athenOps\x12!\n" +
+	"\belse_ops\x18\x03 \x03(\v2\x06.pb.OpR\aelseOps\x12\x1b\n" +
+	"\tclient_id\x18\x04 \x01(\x03R\bclientId\x12\x10\n" +
+	"\x03seq\x18\x05 \x01(\x03R\x03seq\"N\n" +
+	"\bKeyValue\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\fR\x05value\x12\x1a\n" +
+	"\brevision\x18\x03 \x01(\x03R\brevision\"e\n" +
+	"\vTxnResponse\x12\x1c\n" +
+	"\tsucceeded\x18\x01 \x01(\bR\tsucceeded\x12&\n" +
+	"\aresults\x18\x02 \x03(\v2\f.pb.KeyValueR\aresults\x12\x10\n" +
+	"\x03err\x18\x03 \x01(\tR\x03err\"\x83\x01\n" +
 	"\fWatchRequest\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x03R\brevision\x12\x1b\n" +
 	"\tclient_id\x18\x03 \x01(\x03R\bclientId\x12\x16\n" +
 	"\x06prefix\x18\x04 \x01(\bR\x06prefix\x12\x10\n" +
-	"\x03seq\x18\x05 \x01(\x03R\x03seq\"C\n" +
+	"\x03seq\x18\x05 \x01(\x03R\x03seq\"_\n" +
 	"\x05Event\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\fR\x05value\x12\x12\n" +
-	"\x04type\x18\x03 \x01(\tR\x04type\"`\n" +
+	"\x04type\x18\x03 \x01(\tR\x04type\x12\x1a\n" +
+	"\brevision\x18\x04 \x01(\x03R\brevision\"`\n" +
 	"\rWatchResponse\x12!\n" +
-	"\x06events\x18\x01 \x03(\v2\t.kv.EventR\x06events\x12\x1a\n" +
+	"\x06events\x18\x01 \x03(\v2\t.pb.EventR\x06events\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x03R\brevision\x12\x10\n" +
-	"\x03err\x18\x03 \x01(\tR\x03err2\x84\x01\n" +
+	"\x03err\x18\x03 \x01(\tR\x03err\"%\n" +
+	"\x11LeaseGrantRequest\x12\x10\n" +
+	"\x03ttl\x18\x01 \x01(\x03R\x03ttl\"H\n" +
+	"\x12LeaseGrantResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x10\n" +
+	"\x03ttl\x18\x02 \x01(\x03R\x03ttl\x12\x10\n" +
+	"\x03err\x18\x03 \x01(\tR\x03err\"$\n" +
+	"\x12LeaseRevokeRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"'\n" +
+	"\x13LeaseRevokeResponse\x12\x10\n" +
+	"\x03err\x18\x01 \x01(\tR\x03err\"'\n" +
+	"\x15LeaseKeepAliveRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"L\n" +
+	"\x16LeaseKeepAliveResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x10\n" +
+	"\x03err\x18\x02 \x01(\tR\x03err\x12\x10\n" +
+	"\x03ttl\x18\x03 \x01(\x03R\x03ttl*E\n" +
+	"\tCompareOp\x12\x11\n" +
+	"\rCOMPARE_EQUAL\x10\x00\x12\x13\n" +
+	"\x0fCOMPARE_GREATER\x10\x01\x12\x10\n" +
+	"\fCOMPARE_LESS\x10\x02*/\n" +
+	"\x06OpType\x12\n" +
+	"\n" +
+	"\x06OP_GET\x10\x00\x12\n" +
+	"\n" +
+	"\x06OP_PUT\x10\x01\x12\r\n" +
+	"\tOP_DELETE\x10\x022\xff\x02\n" +
 	"\x02KV\x12&\n" +
-	"\x03Put\x12\x0e.kv.PutRequest\x1a\x0f.kv.PutResponse\x12&\n" +
-	"\x03Get\x12\x0e.kv.GetRequest\x1a\x0f.kv.GetResponse\x12.\n" +
-	"\x05Watch\x12\x10.kv.WatchRequest\x1a\x11.kv.WatchResponse0\x01B\x1cZ\x1aetcd-KV/internal/api/kv/pbb\x06proto3"
+	"\x03Put\x12\x0e.pb.PutRequest\x1a\x0f.pb.PutResponse\x12&\n" +
+	"\x03Get\x12\x0e.pb.GetRequest\x1a\x0f.pb.GetResponse\x12/\n" +
+	"\x06Delete\x12\x11.pb.DeleteRequest\x1a\x12.pb.DeleteResponse\x12.\n" +
+	"\x05Watch\x12\x10.pb.WatchRequest\x1a\x11.pb.WatchResponse0\x01\x12;\n" +
+	"\n" +
+	"LeaseGrant\x12\x15.pb.LeaseGrantRequest\x1a\x16.pb.LeaseGrantResponse\x12>\n" +
+	"\vLeaseRevoke\x12\x16.pb.LeaseRevokeRequest\x1a\x17.pb.LeaseRevokeResponse\x12K\n" +
+	"\x0eLeaseKeepAlive\x12\x19.pb.LeaseKeepAliveRequest\x1a\x1a.pb.LeaseKeepAliveResponse(\x010\x01B\x1cZ\x1aetcd-KV/internal/api/kv/pbb\x06proto3"
 
 var (
 	file_kv_proto_rawDescOnce sync.Once
@@ -493,29 +1449,59 @@ func file_kv_proto_rawDescGZIP() []byte {
 	return file_kv_proto_rawDescData
 }
 
-var file_kv_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_kv_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_kv_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_kv_proto_goTypes = []any{
-	(*PutRequest)(nil),    // 0: kv.PutRequest
-	(*PutResponse)(nil),   // 1: kv.PutResponse
-	(*GetRequest)(nil),    // 2: kv.GetRequest
-	(*GetResponse)(nil),   // 3: kv.GetResponse
-	(*WatchRequest)(nil),  // 4: kv.WatchRequest
-	(*Event)(nil),         // 5: kv.Event
-	(*WatchResponse)(nil), // 6: kv.WatchResponse
+	(CompareOp)(0),                 // 0: pb.CompareOp
+	(OpType)(0),                    // 1: pb.OpType
+	(*PutRequest)(nil),             // 2: pb.PutRequest
+	(*PutResponse)(nil),            // 3: pb.PutResponse
+	(*GetRequest)(nil),             // 4: pb.GetRequest
+	(*GetResponse)(nil),            // 5: pb.GetResponse
+	(*DeleteRequest)(nil),          // 6: pb.DeleteRequest
+	(*DeleteResponse)(nil),         // 7: pb.DeleteResponse
+	(*Compare)(nil),                // 8: pb.Compare
+	(*Op)(nil),                     // 9: pb.Op
+	(*TxnRequest)(nil),             // 10: pb.TxnRequest
+	(*KeyValue)(nil),               // 11: pb.KeyValue
+	(*TxnResponse)(nil),            // 12: pb.TxnResponse
+	(*WatchRequest)(nil),           // 13: pb.WatchRequest
+	(*Event)(nil),                  // 14: pb.Event
+	(*WatchResponse)(nil),          // 15: pb.WatchResponse
+	(*LeaseGrantRequest)(nil),      // 16: pb.LeaseGrantRequest
+	(*LeaseGrantResponse)(nil),     // 17: pb.LeaseGrantResponse
+	(*LeaseRevokeRequest)(nil),     // 18: pb.LeaseRevokeRequest
+	(*LeaseRevokeResponse)(nil),    // 19: pb.LeaseRevokeResponse
+	(*LeaseKeepAliveRequest)(nil),  // 20: pb.LeaseKeepAliveRequest
+	(*LeaseKeepAliveResponse)(nil), // 21: pb.LeaseKeepAliveResponse
 }
 var file_kv_proto_depIdxs = []int32{
-	5, // 0: kv.WatchResponse.events:type_name -> kv.Event
-	0, // 1: kv.KV.Put:input_type -> kv.PutRequest
-	2, // 2: kv.KV.Get:input_type -> kv.GetRequest
-	4, // 3: kv.KV.Watch:input_type -> kv.WatchRequest
-	1, // 4: kv.KV.Put:output_type -> kv.PutResponse
-	3, // 5: kv.KV.Get:output_type -> kv.GetResponse
-	6, // 6: kv.KV.Watch:output_type -> kv.WatchResponse
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	0,  // 0: pb.Compare.op:type_name -> pb.CompareOp
+	1,  // 1: pb.Op.type:type_name -> pb.OpType
+	8,  // 2: pb.TxnRequest.compares:type_name -> pb.Compare
+	9,  // 3: pb.TxnRequest.then_ops:type_name -> pb.Op
+	9,  // 4: pb.TxnRequest.else_ops:type_name -> pb.Op
+	11, // 5: pb.TxnResponse.results:type_name -> pb.KeyValue
+	14, // 6: pb.WatchResponse.events:type_name -> pb.Event
+	2,  // 7: pb.KV.Put:input_type -> pb.PutRequest
+	4,  // 8: pb.KV.Get:input_type -> pb.GetRequest
+	6,  // 9: pb.KV.Delete:input_type -> pb.DeleteRequest
+	13, // 10: pb.KV.Watch:input_type -> pb.WatchRequest
+	16, // 11: pb.KV.LeaseGrant:input_type -> pb.LeaseGrantRequest
+	18, // 12: pb.KV.LeaseRevoke:input_type -> pb.LeaseRevokeRequest
+	20, // 13: pb.KV.LeaseKeepAlive:input_type -> pb.LeaseKeepAliveRequest
+	3,  // 14: pb.KV.Put:output_type -> pb.PutResponse
+	5,  // 15: pb.KV.Get:output_type -> pb.GetResponse
+	7,  // 16: pb.KV.Delete:output_type -> pb.DeleteResponse
+	15, // 17: pb.KV.Watch:output_type -> pb.WatchResponse
+	17, // 18: pb.KV.LeaseGrant:output_type -> pb.LeaseGrantResponse
+	19, // 19: pb.KV.LeaseRevoke:output_type -> pb.LeaseRevokeResponse
+	21, // 20: pb.KV.LeaseKeepAlive:output_type -> pb.LeaseKeepAliveResponse
+	14, // [14:21] is the sub-list for method output_type
+	7,  // [7:14] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_kv_proto_init() }
@@ -528,13 +1514,14 @@ func file_kv_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kv_proto_rawDesc), len(file_kv_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   7,
+			NumEnums:      2,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_kv_proto_goTypes,
 		DependencyIndexes: file_kv_proto_depIdxs,
+		EnumInfos:         file_kv_proto_enumTypes,
 		MessageInfos:      file_kv_proto_msgTypes,
 	}.Build()
 	File_kv_proto = out.File

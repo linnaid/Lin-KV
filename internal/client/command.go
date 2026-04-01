@@ -72,12 +72,14 @@ import (
 // }
 
 func (c *Client) Put(ctx context.Context, key string, value []byte) error {
+	seq := c.getSeq()
+
 	return c.callWithRetry(ctx, func(srv int) error {
 		req := &kv.PutRequest{
-			Key: key,
-			Value: value,
+			Key:      key,
+			Value:    value,
 			ClientID: c.clientID,
-			Seq: c.seq,
+			Seq:      seq,
 		}
 
 		reply := &kv.PutResponse{}
@@ -97,9 +99,9 @@ func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
 
 	err := c.callWithRetry(ctx, func(srv int) error {
 		req := &kv.GetRequest{
-			Key: key,
+			Key:      key,
 			ClientID: c.clientID,
-			Seq: seq,
+			Seq:      seq,
 		}
 
 		reply := &kv.GetResponse{}
@@ -146,7 +148,7 @@ func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
 
 // 			if !ok {
 // 				Tools.Debug("client/command: Get RPC error", srv)
-				
+
 // 				c.updateLeader((srv + 1) % len(c.servers))
 // 				continue
 // 			}
@@ -187,9 +189,9 @@ func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
 
 func parseErr(errStr string) error {
 	if errStr == "" {
-		return  nil
+		return nil
 	}
-	
+
 	if errStr == ErrNotLeader.Error() {
 		return ErrNotLeader
 	}

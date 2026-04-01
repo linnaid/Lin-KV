@@ -29,33 +29,40 @@ func (s *KVStore) Watch(key string, fromRev int64, prefix bool) (<-chan Event, i
 		Tools.Error("请求的是已被压缩的版本", fromRev, s.compactRev)
 		return nil, -1, ErrCompacted
 	}
-	
+
 	id := s.nextWatcherID
 	s.nextWatcherID++
 
 	ch := make(chan Event, 16)
 
 	backlog := make([]Event, 0, len(s.events))
+	lastSentRev := fromRev - 1
 	for _, e := range s.events {
 		if prefix {
 			if strings.HasPrefix(e.Key, key) && e.Rev.Main >= fromRev {
 				backlog = append(backlog, e)
+				if e.Rev.Main > lastSentRev {
+					lastSentRev = e.Rev.Main
+				}
 			}
 		} else {
 			if e.Key == key && e.Rev.Main >= fromRev {
 				backlog = append(backlog, e)
+				if e.Rev.Main > lastSentRev {
+					lastSentRev = e.Rev.Main
+				}
 			}
 		}
 	}
 
 	w := &Watcher{
-		ID: id,
-		Key: key,
+		ID:       id,
+		Key:      key,
 		StartRev: fromRev,
-		Prefix: prefix,
-		Ch: ch,
+		Prefix:   prefix,
+		Ch:       ch,
 
-		lastSentRev: fromRev - 1,
+		lastSentRev: lastSentRev,
 	}
 
 	if prefix {
@@ -63,7 +70,7 @@ func (s *KVStore) Watch(key string, fromRev int64, prefix bool) (<-chan Event, i
 	} else {
 		s.watchers[key] = append(s.watchers[key], w)
 	}
-	
+
 	s.watchersByID[id] = w
 
 	s.mu.Unlock()
@@ -71,7 +78,7 @@ func (s *KVStore) Watch(key string, fromRev int64, prefix bool) (<-chan Event, i
 		for _, e := range backlog {
 
 			select {
-			case ch<-e:
+			case ch <- e:
 			default:
 			}
 		}
@@ -102,7 +109,7 @@ func (s *KVStore) dispatcherLoop() {
 			}
 
 			select {
-			case w.Ch<-ev:
+			case w.Ch <- ev:
 				w.lastSentRev = ev.Rev.Main
 			default:
 				s.CancelWatcher(w.ID)
@@ -130,7 +137,7 @@ func (s *KVStore) dispatcherLoop() {
 					}
 
 					select {
-					case w.Ch<-ev:
+					case w.Ch <- ev:
 						w.lastSentRev = ev.Rev.Main
 					default:
 						s.CancelWatcher(w.ID)

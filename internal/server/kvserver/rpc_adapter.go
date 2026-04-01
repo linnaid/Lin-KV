@@ -1,8 +1,8 @@
 package kvserver
 
 import (
+	"context"
 	"etcd-KV/Tools"
-	kv "etcd-KV/internal/api/kv/model"
 	"etcd-KV/internal/api/kv/pb"
 )
 
@@ -13,7 +13,51 @@ type RPCAdapter struct {
 }
 
 
-func (r *RPCAdapter) Watch(req *pb.WatchRequest, stream pb.KV_WatchServer) error {
+func NewRPCAdapter(server *Server) *RPCAdapter {
+	return &RPCAdapter{
+		server: server,
+	}
+}
+
+func (r *RPCAdapter) Put(ctx context.Context, 
+	req *pb.PutRequest) (*pb.PutResponse, error) {
+		resp, err := r.server.Put(ctx, fromPBPutRequest(req))
+		out := toPBPutResponse(resp)
+
+		if err != nil {
+			out.Err = err.Error()
+			return out, nil
+		}
+		return out, nil
+	}
+
+func (r *RPCAdapter) Get(ctx context.Context, 
+	req *pb.GetRequest) (*pb.GetResponse, error) {
+		resp, err := r.server.Get(ctx, fromPBGetRequest(req))
+		out := toPBGetResponse(resp)
+
+		if err != nil {
+			out.Err = err.Error()
+			return out, nil
+		}
+		return out, nil
+	}
+
+func (r *RPCAdapter) Delete(ctx context.Context, 
+	req *pb.DeleteRequest) (*pb.DeleteResponse, error) {
+		resp, err := r.server.Delete(ctx, fromPBDeleteRequest(req))
+		out := toPBDeleteResponse(resp)
+
+		if err !=nil {
+			out.Err = err.Error()
+			return out, nil
+		}
+		return out, nil
+	}
+
+
+func (r *RPCAdapter) Watch(req *pb.WatchRequest, 
+	stream pb.KV_WatchServer) error {
 
 	mvcc_ch, id, err := r.server.store.Watch(req.Key, req.Revision, req.Prefix)
 	if err != nil {
@@ -39,22 +83,9 @@ func (r *RPCAdapter) Watch(req *pb.WatchRequest, stream pb.KV_WatchServer) error
 				Tools.Debug("RPC_Adapter Watch ch error")
 				return nil
 			}
-
-			var t string
-			if ev.Type == kv.OpDelete {
-				t = "DELETE"
-			} else {
-				t = "PUT"
-			}
 			
 			resp := &pb.WatchResponse{
-				Events: []*pb.Event{
-					{
-						Type: t,
-						Key: ev.Key,
-						Value: ev.Value,
-					},
-				},
+				Events: []*pb.Event{toPBEvent(ev)},
 				Revision: ev.Rev,
 			}
 
@@ -66,36 +97,4 @@ func (r *RPCAdapter) Watch(req *pb.WatchRequest, stream pb.KV_WatchServer) error
 			return nil
 		}
 	}
-	// r.server.addWatcher(w)
-
-	// for {
-	// 	select {
-	// 	case ev := <-w.ch:
-
-			// var t string
-			// if ev.Type == kv.OpDelete {
-			// 	t = "DELETE"
-			// } else {
-			// 	t = "PUT"
-			// }
-			
-			// resp := &pb.WatchResponse{
-			// 	Events: []*pb.Event{
-			// 		{
-			// 			Type: t,
-			// 			Key: ev.Key,
-			// 			Value: ev.Value,
-			// 		},
-			// 	},
-			// 	// revision 暂不处理
-			// }
-
-			// if err := stream.Send(resp); err != nil {
-			// 	return err
-			// }
-
-	// 	case <-stream.Context().Done():
-	// 		return nil
-	// 	}
-	// }
 }

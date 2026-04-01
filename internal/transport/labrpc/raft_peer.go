@@ -15,7 +15,11 @@ type LabrpcPeer struct {
 	end *labrpc.ClientEnd
 }
 
-func(p *LabrpcPeer) RequestVote(args *raft.RequestVoteArgs, reply *raft.RequestVoteReply) error {
+func NewPeer(end *labrpc.ClientEnd) raft.Peer {
+	return &LabrpcPeer{end: end}
+}
+
+func (p *LabrpcPeer) RequestVote(args *raft.RequestVoteArgs, reply *raft.RequestVoteReply) error {
 	if ok := p.end.Call("Raft.RequestVote", args, reply); !ok {
 		return fmt.Errorf("rpc call failed: Raft.RequestVote")
 	}
@@ -33,5 +37,5 @@ func (p *LabrpcPeer) InstallSnapshot(args *raft.InstallSnapshotArgs, reply *raft
 	if ok := p.end.Call("Raft.InstallSnapshot", args, reply); !ok {
 		return fmt.Errorf("rpc call failed: Raft.InstallSnapshot")
 	}
-	return  nil
+	return nil
 }

@@ -62,6 +62,7 @@ type Result struct {
 	Rev  	*mvcc.Revision
 	Value 	[]byte
 	Err 	error
+	Found 	bool
 
 	Cmd 	command.KVCommand
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"etcd-KV/Tools"
 	"etcd-KV/internal/api/kv/model"
-	"etcd-KV/internal/api/kv/pb"
 	"time"
 )
 
@@ -19,7 +18,7 @@ func (c *Client) watchInternal(ctx context.Context, key string, prefix bool) <-c
 		for {
 			select {
 			case <-ctx.Done():
-				return 
+				return
 			default:
 			}
 
@@ -30,11 +29,11 @@ func (c *Client) watchInternal(ctx context.Context, key string, prefix bool) <-c
 
 			err := c.callWithRetry(ctx, func(srv int) error {
 				req := &kv.WatchRequest{
-					Key: key,
+					Key:      key,
 					Revision: rev,
 					ClientID: c.clientID,
-					Prefix: prefix,
-					Seq: seq,
+					Prefix:   prefix,
+					Seq:      seq,
 				}
 
 				reply := &kv.WatchResponse{}
@@ -56,10 +55,10 @@ func (c *Client) watchInternal(ctx context.Context, key string, prefix bool) <-c
 			})
 
 			if err != nil {
-				
+
 				// if err == context.Canceled || err == context.DeadlineExceeded {
 				// 	Tools.Error("err == context.Canceled || DeadlineExceded.", err)
-				// 	return 
+				// 	return
 				// }
 				if ctx.Err() != nil {
 					Tools.Error("err == context.Canceled || DeadlineExceded.", err)
@@ -74,9 +73,9 @@ func (c *Client) watchInternal(ctx context.Context, key string, prefix bool) <-c
 
 			for _, ev := range events {
 				select {
-				case ch <-ev:
+				case ch <- ev:
 				case <-ctx.Done():
-					return 
+					return
 				}
 			}
 
@@ -87,20 +86,20 @@ func (c *Client) watchInternal(ctx context.Context, key string, prefix bool) <-c
 			}
 			select {
 			case <-time.After(delay):
-			case <- ctx.Done():
+			case <-ctx.Done():
 				return
 			}
-		
+
 		}
 	}()
-	return ch 
+	return ch
 }
 
-///////////////////////////////////////////////////
+// /////////////////////////////////////////////////
 func (c *Client) Watch(ctx context.Context, key string) <-chan *kv.Event {
 	ch := make(chan *kv.Event, 100)
-	
-	go func ()  {
+
+	go func() {
 		defer close(ch)
 
 		streamCh := c.watchStream(ctx, key, false)
@@ -111,25 +110,25 @@ func (c *Client) Watch(ctx context.Context, key string) <-chan *kv.Event {
 				// 因为 streaming失败，所以fallback
 				for ev := range c.watchInternal(ctx, key, false) {
 					select {
-					case ch <-ev:
+					case ch <- ev:
 					case <-ctx.Done():
-						return 
+						return
 					}
 				}
 				return
 			}
 
 			select {
-			case ch <-ev:
+			case ch <- ev:
 			case <-ctx.Done():
-				return 
+				return
 			}
 
 			for ev := range streamCh {
-				select{
-				case ch <-ev:
+				select {
+				case ch <- ev:
 				case <-ctx.Done():
-					return 
+					return
 				}
 			}
 
@@ -147,18 +146,18 @@ func (c *Client) WatchPrefix(ctx context.Context, prefix string) <-chan *kv.Even
 
 // 后面要改成leader routing
 func (c *Client) watchStream(ctx context.Context, key string, prefix bool) <-chan *kv.Event {
-	ch :=make(chan *kv.Event, 100)
+	ch := make(chan *kv.Event, 100)
 
-	go func ()  {
+	go func() {
 		defer close(ch)
 
 		var rev int64 = 0
 
 		for {
-			req := &pb.WatchRequest{
-				Key: key,
-				Prefix: prefix,
-				ClientId: c.clientID,
+			req := &kv.WatchRequest{
+				Key:      key,
+				Prefix:   prefix,
+				ClientID: c.clientID,
 				Revision: rev,
 			}
 
@@ -176,7 +175,7 @@ func (c *Client) watchStream(ctx context.Context, key string, prefix bool) <-cha
 					}
 					continue
 				case <-ctx.Done():
-					return 
+					return
 				}
 			}
 			deleay = 100 * time.Millisecond
@@ -191,7 +190,7 @@ func (c *Client) watchStream(ctx context.Context, key string, prefix bool) <-cha
 				default:
 				}
 
-				var resp pb.WatchResponse
+				var resp kv.WatchResponse
 
 				err := stream.Recv(&resp)
 				if err != nil {
@@ -206,34 +205,16 @@ func (c *Client) watchStream(ctx context.Context, key string, prefix bool) <-cha
 				}
 
 				rev = resp.Revision
-			
-				for _, e := range resp.Events {
 
-					var t kv.OpType
-
-					switch e.Type {
-					case "PUT":
-						t = kv.OpPut
-					case "DELETE":
-						t = kv.OpDelete
-					default:
-						continue
-					}
-
-					ev := &kv.Event{
-						Type: t,
-						Key: e.Key,
-						Value: e.Value,
-					}
-
+				for _, ev := range resp.Events {
 					select {
-					case ch <-ev:
+					case ch <- ev:
 					case <-ctx.Done():
 						return
 					}
 				}
-			}	
-		}	
+			}
+		}
 	}()
 
 	return ch

@@ -25,6 +25,7 @@ func NewServer(
 			leaseMgr: leaseMgr,
 			applyCh: applyCh,
 			waitCh: make(map[int64]*waitEntry),
+			LastResult: map[int64]Result{},
 
 			clientLastSeq: make(map[int64]int64),
 			// clientLastValue: make(map[int64][]byte),
@@ -198,6 +199,7 @@ func (s *Server) Get(ctx context.Context,
 			return &kv.GetResponse{
 				Value: valCopy,
 				Revision: result.Rev.Main,
+				Found: result.Found,
 			}, nil
 		}
 
@@ -217,6 +219,7 @@ func (s *Server) Get(ctx context.Context,
 				Main: revCopy,
 			},
 			Value: valCopy,
+			Found: ok,
 		}
 		
 		s.mu.Unlock()
@@ -228,6 +231,7 @@ func (s *Server) Get(ctx context.Context,
 		return &kv.GetResponse{
 			Value: value,
 			Revision: rev,
+			Found: ok,
 		}, nil
 	}
 
