@@ -12,6 +12,8 @@ service KV {
 
     // Streaming watch
     rpc Watch(WatchRequest) returns (stream WatchResponse);
+
+    rpc Txn(TxnRequest) returns (TxnResponse);
     
     rpc LeaseGrant(LeaseGrantRequest) returns (LeaseGrantResponse);
     rpc LeaseRevoke(LeaseRevokeRequest) returns (LeaseRevokeResponse);

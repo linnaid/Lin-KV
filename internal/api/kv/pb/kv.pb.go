@@ -1426,12 +1426,13 @@ const file_kv_proto_rawDesc = "" +
 	"\x06OP_GET\x10\x00\x12\n" +
 	"\n" +
 	"\x06OP_PUT\x10\x01\x12\r\n" +
-	"\tOP_DELETE\x10\x022\xff\x02\n" +
+	"\tOP_DELETE\x10\x022\xa7\x03\n" +
 	"\x02KV\x12&\n" +
 	"\x03Put\x12\x0e.pb.PutRequest\x1a\x0f.pb.PutResponse\x12&\n" +
 	"\x03Get\x12\x0e.pb.GetRequest\x1a\x0f.pb.GetResponse\x12/\n" +
 	"\x06Delete\x12\x11.pb.DeleteRequest\x1a\x12.pb.DeleteResponse\x12.\n" +
-	"\x05Watch\x12\x10.pb.WatchRequest\x1a\x11.pb.WatchResponse0\x01\x12;\n" +
+	"\x05Watch\x12\x10.pb.WatchRequest\x1a\x11.pb.WatchResponse0\x01\x12&\n" +
+	"\x03Txn\x12\x0e.pb.TxnRequest\x1a\x0f.pb.TxnResponse\x12;\n" +
 	"\n" +
 	"LeaseGrant\x12\x15.pb.LeaseGrantRequest\x1a\x16.pb.LeaseGrantResponse\x12>\n" +
 	"\vLeaseRevoke\x12\x16.pb.LeaseRevokeRequest\x1a\x17.pb.LeaseRevokeResponse\x12K\n" +
@@ -1487,18 +1488,20 @@ var file_kv_proto_depIdxs = []int32{
 	4,  // 8: pb.KV.Get:input_type -> pb.GetRequest
 	6,  // 9: pb.KV.Delete:input_type -> pb.DeleteRequest
 	13, // 10: pb.KV.Watch:input_type -> pb.WatchRequest
-	16, // 11: pb.KV.LeaseGrant:input_type -> pb.LeaseGrantRequest
-	18, // 12: pb.KV.LeaseRevoke:input_type -> pb.LeaseRevokeRequest
-	20, // 13: pb.KV.LeaseKeepAlive:input_type -> pb.LeaseKeepAliveRequest
-	3,  // 14: pb.KV.Put:output_type -> pb.PutResponse
-	5,  // 15: pb.KV.Get:output_type -> pb.GetResponse
-	7,  // 16: pb.KV.Delete:output_type -> pb.DeleteResponse
-	15, // 17: pb.KV.Watch:output_type -> pb.WatchResponse
-	17, // 18: pb.KV.LeaseGrant:output_type -> pb.LeaseGrantResponse
-	19, // 19: pb.KV.LeaseRevoke:output_type -> pb.LeaseRevokeResponse
-	21, // 20: pb.KV.LeaseKeepAlive:output_type -> pb.LeaseKeepAliveResponse
-	14, // [14:21] is the sub-list for method output_type
-	7,  // [7:14] is the sub-list for method input_type
+	10, // 11: pb.KV.Txn:input_type -> pb.TxnRequest
+	16, // 12: pb.KV.LeaseGrant:input_type -> pb.LeaseGrantRequest
+	18, // 13: pb.KV.LeaseRevoke:input_type -> pb.LeaseRevokeRequest
+	20, // 14: pb.KV.LeaseKeepAlive:input_type -> pb.LeaseKeepAliveRequest
+	3,  // 15: pb.KV.Put:output_type -> pb.PutResponse
+	5,  // 16: pb.KV.Get:output_type -> pb.GetResponse
+	7,  // 17: pb.KV.Delete:output_type -> pb.DeleteResponse
+	15, // 18: pb.KV.Watch:output_type -> pb.WatchResponse
+	12, // 19: pb.KV.Txn:output_type -> pb.TxnResponse
+	17, // 20: pb.KV.LeaseGrant:output_type -> pb.LeaseGrantResponse
+	19, // 21: pb.KV.LeaseRevoke:output_type -> pb.LeaseRevokeResponse
+	21, // 22: pb.KV.LeaseKeepAlive:output_type -> pb.LeaseKeepAliveResponse
+	15, // [15:23] is the sub-list for method output_type
+	7,  // [7:15] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name

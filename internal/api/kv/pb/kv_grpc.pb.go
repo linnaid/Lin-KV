@@ -23,6 +23,7 @@ const (
 	KV_Get_FullMethodName            = "/pb.KV/Get"
 	KV_Delete_FullMethodName         = "/pb.KV/Delete"
 	KV_Watch_FullMethodName          = "/pb.KV/Watch"
+	KV_Txn_FullMethodName            = "/pb.KV/Txn"
 	KV_LeaseGrant_FullMethodName     = "/pb.KV/LeaseGrant"
 	KV_LeaseRevoke_FullMethodName    = "/pb.KV/LeaseRevoke"
 	KV_LeaseKeepAlive_FullMethodName = "/pb.KV/LeaseKeepAlive"
@@ -37,6 +38,7 @@ type KVClient interface {
 	Delete(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error)
 	// Streaming watch
 	Watch(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchResponse], error)
+	Txn(ctx context.Context, in *TxnRequest, opts ...grpc.CallOption) (*TxnResponse, error)
 	LeaseGrant(ctx context.Context, in *LeaseGrantRequest, opts ...grpc.CallOption) (*LeaseGrantResponse, error)
 	LeaseRevoke(ctx context.Context, in *LeaseRevokeRequest, opts ...grpc.CallOption) (*LeaseRevokeResponse, error)
 	LeaseKeepAlive(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[LeaseKeepAliveRequest, LeaseKeepAliveResponse], error)
@@ -99,6 +101,16 @@ func (c *kVClient) Watch(ctx context.Context, in *WatchRequest, opts ...grpc.Cal
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type KV_WatchClient = grpc.ServerStreamingClient[WatchResponse]
 
+func (c *kVClient) Txn(ctx context.Context, in *TxnRequest, opts ...grpc.CallOption) (*TxnResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TxnResponse)
+	err := c.cc.Invoke(ctx, KV_Txn_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *kVClient) LeaseGrant(ctx context.Context, in *LeaseGrantRequest, opts ...grpc.CallOption) (*LeaseGrantResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(LeaseGrantResponse)
@@ -141,6 +153,7 @@ type KVServer interface {
 	Delete(context.Context, *DeleteRequest) (*DeleteResponse, error)
 	// Streaming watch
 	Watch(*WatchRequest, grpc.ServerStreamingServer[WatchResponse]) error
+	Txn(context.Context, *TxnRequest) (*TxnResponse, error)
 	LeaseGrant(context.Context, *LeaseGrantRequest) (*LeaseGrantResponse, error)
 	LeaseRevoke(context.Context, *LeaseRevokeRequest) (*LeaseRevokeResponse, error)
 	LeaseKeepAlive(grpc.BidiStreamingServer[LeaseKeepAliveRequest, LeaseKeepAliveResponse]) error
@@ -165,6 +178,9 @@ func (UnimplementedKVServer) Delete(context.Context, *DeleteRequest) (*DeleteRes
 }
 func (UnimplementedKVServer) Watch(*WatchRequest, grpc.ServerStreamingServer[WatchResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method Watch not implemented")
+}
+func (UnimplementedKVServer) Txn(context.Context, *TxnRequest) (*TxnResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Txn not implemented")
 }
 func (UnimplementedKVServer) LeaseGrant(context.Context, *LeaseGrantRequest) (*LeaseGrantResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LeaseGrant not implemented")
@@ -261,6 +277,24 @@ func _KV_Watch_Handler(srv interface{}, stream grpc.ServerStream) error {
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type KV_WatchServer = grpc.ServerStreamingServer[WatchResponse]
 
+func _KV_Txn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TxnRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KVServer).Txn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KV_Txn_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KVServer).Txn(ctx, req.(*TxnRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _KV_LeaseGrant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(LeaseGrantRequest)
 	if err := dec(in); err != nil {
@@ -322,6 +356,10 @@ var KV_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Delete",
 			Handler:    _KV_Delete_Handler,
+		},
+		{
+			MethodName: "Txn",
+			Handler:    _KV_Txn_Handler,
 		},
 		{
 			MethodName: "LeaseGrant",
