@@ -47,8 +47,22 @@ type DeleteResponse struct {
 	Err 		string
 }
 
+type CompareOp int
+const (
+	CompareEqual CompareOp = iota
+	CompareLess
+	CompareGreater
+)
+type Compare struct {
+	Key 	string
+	Op 		CompareOp
+	Revision int64
+}
+
 type TxnRequest struct {
-	Ops 		[]*Op
+	Compares 	[]*Compare
+	ThenOps 	[]*Op
+	ElseOps 	[]*Op
 	ClientID 	int64
 	Seq 		int64
 }
@@ -57,6 +71,7 @@ type OpResult struct {
 	Type 	OpType
 	Key 	string
 	Value 	[]byte
+	Revision int64
 }
 
 type TxnResponse struct {
@@ -74,7 +89,6 @@ func (r *TxnResult) Get(i int) []byte {
 }
 
 type OpType int
-
 const (
 	OpGet OpType = iota
 	OpPut
@@ -107,4 +121,29 @@ type WatchResponse struct {
 	Events 		[]*Event
 	Revision 	int64
 	Err 		string
+}
+
+type LeaseGrantRequest struct {
+	ttl int64
+}
+type LeaseGrantResponse struct {
+	id int64
+	ttl int64
+	err string
+}
+
+type LeaseRevokeRequest struct {
+	id int64
+}
+type LeaseRevokeResponse struct {
+	err string
+}
+
+type LeaseKeepAliveRequest struct {
+	id int64
+}
+type LeaseKeepAliveResponse struct {
+	id int64
+	ttl int64
+	err string
 }
