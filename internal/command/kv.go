@@ -10,13 +10,14 @@ const (
 )
 
 type KVCommand struct {
-	Type Type // Put||Delete
-	Key  string
-	Value []byte
+	Type	 Type // Put||Delete
+	Key    	 string
+	Value 	 []byte
 	ClientID int64
-	Seq int64  	   // 客户端请求序号(用于幂等性和去重，防止Raft重放或客户端重试导致重复写)
+	Seq 	 int64  	   // 客户端请求序号(用于幂等性和去重，防止Raft重放或客户端重试导致重复写)
 
-	Rev int64
+	Rev 	 int64
+	LeaseID  int64
 }
 
 // 可序列化
