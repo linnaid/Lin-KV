@@ -4,7 +4,7 @@ package kvserver
 import (
 	"etcd-KV/Tools"
 	"etcd-KV/internal/command"
-	"etcd-KV/internal/storage/mvcc"
+	"fmt"
 )
 
 func (s *Server) applyLoop() {
@@ -12,28 +12,8 @@ func (s *Server) applyLoop() {
 	for msg := range s.applyCh {
 		// Tools.Info("APPLY INDEX", msg.CommandIndex)
 		if msg.SnapshotValid {
-			// s.mu.Lock()
-			// s.store.Restore(msg.Snapshot)
-			// // TODO: restore clientLastSeq + clientLastValue
-			// s.mu.Unlock()
-			// continue
-
-			var snap ServerSnapshot
-
-			err := command.Decode(msg.Command, &snap)
-			if err != nil {
-				Tools.Debug("SnapshotRestore error")
-				panic(err)
-			}
-
-			s.mu.Lock()
-
-			s.store.Restore(msg.Snapshot)
-			s.clientLastSeq = snap.ClientLastSeq
-			// s.clientLastValue = snap.ClientLastValue
-			s.clientLastResult = snap.ClientLastResult
-
-			s.mu.Unlock()
+			s.restoreSnapshot(msg.Snapshot)
+			continue
 		}
 
 		if !msg.CommandValid {
@@ -42,115 +22,63 @@ func (s *Server) applyLoop() {
 
 		data:= msg.Command
 
-		var cmd command.KVCommand
+		var env command.Command
 
-		err := command.Decode(data, &cmd)
+		err := command.Decode(data, &env)
 		if err != nil {
 			Tools.Debug("Decode error in applyLoop.")
 			panic(err)
 		}
-// Tools.Debug("put", cmd.Key, cmd.Value, cmd.Type)
+
+		index := change(msg.CommandIndex)
+		clientID := env.ClientID()
+		seq := env.Seq()
 
 		// Dedup
 		s.mu.Lock()
+		lastSeq := s.clientLastSeq[clientID]
 
-		lastSeq := s.clientLastSeq[cmd.ClientID]
-		if cmd.Seq < lastSeq {
+		if seq < lastSeq {
 			s.mu.Unlock()
 			continue
 		}
 
-		if cmd.Seq == lastSeq {
+		if seq == lastSeq {
+			result := s.clientLastResult[clientID]
 
-			commandIndex := change(msg.CommandIndex)
-			result := s.clientLastResult[cmd.ClientID]
-
-			if ch, ok := s.waitCh[commandIndex]; ok {
-				if match(ch, &cmd) {
-					// ch.Result = Result{
-					// 	Cmd: cmd,
-					// 	Value: s.clientLastValue[cmd.ClientID],
-					// 	Err: nil,
-					// 	Rev: &mvcc.Revision{
-					// 		Main: cmd.Rev,
-					// 	},
-					// }
+			if ch, ok := s.waitCh[index]; ok {
+				if match(ch, &env) {
 					ch.Result = result
 					close(ch.Notify)
-					delete(s.waitCh, commandIndex)
-				} else {
-					delete(s.waitCh, commandIndex)
 				}
+				delete(s.waitCh, index)
 			}
-
 			s.mu.Unlock()
 			continue
 		}
 		
 		s.mu.Unlock()
 
-		var value []byte
-		var ok_value bool
-		ok_get := false
-		
-		var rev mvcc.Revision
+		result := s.applyCommand(&env)
+		result.Kind = env.Kind
+		result.ClientID = clientID
+		result.Seq = seq
 
-		switch cmd.Type {
-		case command.CmdPut:
-			// Tools.Debug("put", cmd.Key, cmd.Value)
-			// lease 稍后实现
-			rev = s.store.Put(cmd.Key, cmd.Value, 0)
-
-		case command.CmdDelete:
-			rev = s.store.Delete(cmd.Key)
-
-		case command.CmdGet:
-			ok_get = true
-			value, _, ok_value = s.store.Get(cmd.Key, cmd.Rev)
-			if !ok_value {
-				value = nil
-			}
-		}
-		
 		s.mu.Lock()
-		result := Result{
-			Rev: &mvcc.Revision{
-				Main: cmd.Rev,
-			},
-			Value: cmd.Value,
-			Err: nil,
-			Cmd: cmd,
-		}
-		index := change(msg.CommandIndex)
-		s.clientLastSeq[cmd.ClientID] = cmd.Seq
+		s.clientLastSeq[clientID] = seq
+		s.clientLastResult[clientID] = result
 		// Tools.Info("lastClientID", cmd.ClientID)
+
 		if ch, ok := s.waitCh[index]; ok {
 
-			if match(ch, &cmd) {
-
-				if ok_get {
-					ch.Result.Value = value
-					// s.clientLastValue[cmd.ClientID] = value
-					s.clientLastResult[cmd.ClientID] = result
-				} else {
-					ch.Result.Rev = &rev
-				}
-				
-				ch.Result.Err = nil
+			if match(ch, &env) {
+				ch.Result = result
 				close(ch.Notify)
-				delete(s.waitCh, index)
-
-			   } else {
-				delete(s.waitCh, index)
-			   }
-
+			}
+			delete(s.waitCh, index)
 		} else {
 			// 🔥 关键：缓存结果（防止先 apply 后注册）
-			s.LastResult[index] = Result{
-				Rev: &rev,
-				Value: value,
-				Err: nil,
-			}
+			s.LastResult[index] = result
 		}
 		s.mu.Unlock()
 		
@@ -161,4 +89,132 @@ func (s *Server) applyLoop() {
 
 	}
 
+}
+
+func (s *Server) restoreSnapshot(data []byte) {
+	var snap ServerSnapshot
+
+	err := command.Decode(data, &snap)
+	if err != nil {
+		Tools.Debug("SnapshotRestore error")
+		panic(err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.store.Restore(snap.KVSnapshot)
+	s.clientLastSeq = snap.ClientLastSeq
+	s.clientLastResult = snap.ClientLastResult
+}
+
+func (s *Server) applyCommand(env *command.Command) Result {
+	switch env.Kind {
+	case command.KindKV:
+		return s.applyKV(env.KV)
+	case command.KindTxn:
+		return s.applyTxn(env.Txn)
+	case command.KindLeaseGrant:
+		return s.applyLeaseGrant(env.LeaseGrant)
+	case command.KindLeaseRevoke:
+		return s.applyLeaseRevoke(env.LeaseRevoke)
+	case command.KindLeaseKeepAlive:
+		return s.applyLeaseKeepAlive(env.LeaseKeepAlive)
+	default:
+		return Result{
+			Err: fmt.Errorf("Unknown command kind: %d", env.Kind),
+		}
+	}
+}
+
+func (s *Server) applyKV(cmd *command.KVCommand) Result {
+	if cmd == nil {
+		return Result{
+			Err: fmt.Errorf("nil kv command"),
+		}
+	}
+
+	switch cmd.Type {
+	case command.CmdPut:
+		rev := s.store.Put(cmd.Key, cmd.Value, cmd.LeaseID)
+		return Result{
+			Rev: &rev,
+		}
+
+	case command.CmdDelete:
+		rev := s.store.Delete(cmd.Key)
+		return Result{
+			Rev: &rev,
+		}
+
+	default:
+		return Result{
+			Err: fmt.Errorf("unsupported kv command type %d", cmd.Type),
+		}
+	}
+}
+
+func (s *Server) applyTxn(cmd *command.TxnCommand) Result {
+	if cmd == nil {
+		return Result{
+			Err: fmt.Errorf("nil txn command"),
+		}
+	}
+
+	succeeded, kvs := s.store.Txn(toMVCCTxn(cmd))
+	return Result{
+		TxnSucceeded: succeeded,
+		TxnResults: fromMVCCKeyValues(kvs),
+	}
+}
+
+func (s *Server) applyLeaseGrant(cmd *command.LeaseGrantCommand) Result {
+	if cmd == nil {
+		return Result{
+			Err: fmt.Errorf("nil lease grant command"),
+		}
+	}
+
+	id := s.store.LeaseGrant(cmd.TTL)
+	return Result{
+		LeaseID: id,
+		LeaseTTL: cmd.TTL,
+	}
+}
+
+func (s *Server) applyLeaseRevoke(cmd *command.LeaseRevokeCommand) Result {
+	if cmd == nil {
+		return Result{
+			Err: fmt.Errorf("nil lease revoke command"),
+		}
+	}
+
+	err := s.store.LeaseRevoke(cmd.ID)
+	if err != nil {
+		return Result{
+			Err: err,
+		}
+	}
+
+	return Result{}
+}
+
+func (s *Server) applyLeaseKeepAlive(cmd *command.LeaseKeepAliveCommand) Result {
+	if cmd == nil {
+		return Result{
+			Err: fmt.Errorf("nil lease keepalive command"),
+		}
+	}
+
+	ttl, err := s.store.LeaseKeepAlive(cmd.ID) 
+	if err != nil {
+		return Result{
+			Err: err,
+		}
+	}
+
+	return Result{
+		LeaseTTL: ttl,
+		LeaseID: cmd.ID,
+	}
 }

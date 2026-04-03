@@ -14,13 +14,12 @@ type waitEntry struct {
 	Notify 		chan struct{}
 	ClientID	int64
 	Seq 	    int64
-	// Rev 		*mvcc.Revision
-	Key 		string
-	OpType 		command.Type
+	Kind 		command.Kind
+	// Key 		string
+	// OpType 		command.Type
+
 
 	Result   	Result
-	// Value 		[]byte
-	// Err 		error
 }
 
 type ServerSnapshot struct {
@@ -35,7 +34,6 @@ type Server struct {
 	id 				int
 	raft 			*raft.Raft
 	store 			*mvcc.KVStore
-	leaseMgr		*mvcc.LeaseManager
 
 	applyCh chan 	raft.ApplyMsg  // 全局状态机推进流
 
@@ -59,12 +57,21 @@ var ErrNotLeader = errors.New("Is not Leader.")
 var ErrTimeout = errors.New("Is TimeOut.")
 
 type Result struct {
+	Kind 	 command.Kind
+	ClientID int64
+	Seq 	 int64
+	Err   	 error
+
 	Rev  	*mvcc.Revision
 	Value 	[]byte
-	Err 	error
 	Found 	bool
 
-	Cmd 	command.KVCommand
+	TxnSucceeded bool
+	TxnResults  []*kv.KeyValue
+
+	LeaseID  int64
+	LeaseTTL int64
+	// Cmd 	command.KVCommand
 }
 
 type watcher struct {

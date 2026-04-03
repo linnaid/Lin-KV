@@ -108,3 +108,43 @@ func (r *RPCAdapter) Watch(req *pb.WatchRequest,
 		}
 	}
 }
+
+func (r *RPCAdapter) Txn(ctx context.Context, 
+	req *pb.TxnRequest) (*pb.TxnResponse, error) {
+		resp, err := r.server.Txn(ctx, fromPBTxnRequest(req))
+		out := toPBTxnResponse(resp)
+		if err != nil {
+			out.Err = err.Error()
+		}
+		return out, nil
+	}
+
+func (r *RPCAdapter) LeaseGrant(ctx context.Context, 
+	req *pb.LeaseGrantRequest) (*pb.LeaseGrantResponse, error) {
+		resp, err := r.server.LeaseGrant(ctx, fromPBLeaseGrantRequest(req))
+		out := toPBLeaseGrantResponse(resp)
+		if err != nil {
+			out.Err = err.Error()
+		}
+		return out, nil
+	}
+
+func (r *RPCAdapter) LeaseRevoke(ctx context.Context, 
+	req *pb.LeaseRevokeRequest) (*pb.LeaseRevokeResponse, error) {
+		resp, err := r.server.LeaseRevoke(ctx, fromPBLeaseRevokeRequest(req))
+		out := toPBLeaseRevokeResponse(resp)
+		if err != nil {
+			out.Err = err.Error()
+		}
+		return out, nil
+	}
+
+func (r *RPCAdapter) LeaseKeepAlive(ctx context.Context, 
+	req *pb.LeaseKeepAliveRequest) (*pb.LeaseKeepAliveResponse, error) {
+		resp, err := r.server.LeaseKeepAlive(ctx, fromPBLeaseKeepAliveRequest(req))
+		out := toPBLeaseKeepAliveResponse(resp)
+		if err != nil {
+			out.Err = err.Error()
+		}
+		return out, nil
+	}

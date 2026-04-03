@@ -102,3 +102,184 @@ func toPBEvent(ev *kv.Event) *pb.Event {
 		Revision: ev.Rev,
 	}
 }
+
+func fromPBCompareOp(op pb.CompareOp) kv.CompareOp {
+	switch op {
+	case pb.CompareOp_COMPARE_EQUAL:
+		return kv.CompareEqual
+	case pb.CompareOp_COMPARE_GREATER:
+		return kv.CompareGreater
+	default:
+		return kv.CompareLess
+	}
+}
+
+func fromPBOpType(op pb.OpType) kv.OpType {
+	switch op {
+	case pb.OpType_OP_PUT:
+		return kv.OpPut
+	case pb.OpType_OP_GET:
+		return kv.OpGet
+	default:
+		return kv.OpDelete
+	}
+}
+
+func toPBKeyValue(item *kv.KeyValue) *pb.KeyValue {
+	if item == nil {
+		return nil
+	}
+
+	return &pb.KeyValue{
+		Key: item.Key,
+		Value: append([]byte(nil), item.Value...),
+		Revision: item.Revision,
+	}
+}
+
+func toPBKeyValues(items []*kv.KeyValue) []*pb.KeyValue {
+	if len(items) == 0 {
+		return nil
+	}
+
+	out := make([]*pb.KeyValue, 0, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		out = append(out, toPBKeyValue(item))
+	}
+	return out
+}
+
+func fromPBTxnRequest(req *pb.TxnRequest) *kv.TxnRequest {
+	if req == nil {
+		return nil
+	}
+
+	out := &kv.TxnRequest{
+		ClientID: req.ClientId,
+		Seq: req.Seq,
+		Compares: make([]*kv.Compare, 0, len(req.Compares)),
+		ThenOps: make([]*kv.Op, 0, len(req.ThenOps)),
+		ElseOps: make([]*kv.Op, 0, len(req.ElseOps)),
+	}
+
+	for _, item := range req.Compares {
+		if item == nil {
+			continue
+		}
+		out.Compares = append(out.Compares, &kv.Compare{
+			Key: item.Key,
+			Op: fromPBCompareOp(item.Op),
+			Revision: item.Rev,
+		})
+	}
+
+	for _, item := range req.ThenOps {
+		if item == nil {
+			continue
+		}
+
+		out.ThenOps = append(out.ThenOps, &kv.Op{
+			Type: fromPBOpType(item.Type),
+			Key: item.Key,
+			Value: append([]byte(nil), item.Value...),
+			LeaseID: item.LeaseId,
+		})
+	}
+
+	for _, item := range req.ElseOps {
+		if item == nil {
+			continue
+		}
+
+		out.ElseOps = append(out.ElseOps, &kv.Op{
+			Type: fromPBOpType(item.Type),
+			Key: item.Key,
+			Value: append([]byte(nil), item.Value...),
+			LeaseID: item.LeaseId,
+		})
+	}
+
+	return out
+}
+
+func toPBTxnResponse(resp *kv.TxnResponse) *pb.TxnResponse {
+	if resp == nil {
+		return &pb.TxnResponse{}
+	}
+
+	return &pb.TxnResponse{
+		Succeeded: resp.Succeeded,
+		Results: toPBKeyValues(resp.Results),
+		Err: resp.Err,
+	}
+}
+
+func fromPBLeaseGrantRequest(req *pb.LeaseGrantRequest) *kv.LeaseGrantRequest {
+	if req == nil {
+		return nil
+	}
+
+	return &kv.LeaseGrantRequest{
+		TTL: req.Ttl,
+		ClientID: req.ClientId,
+		Seq: req.Seq,
+	}
+}
+func toPBLeaseGrantResponse(resp *kv.LeaseGrantResponse) *pb.LeaseGrantResponse {
+	if resp == nil {
+		return &pb.LeaseGrantResponse{}
+	}
+
+	return &pb.LeaseGrantResponse{
+		Id: resp.ID,
+		Ttl: resp.TTL,
+		Err: resp.Err,
+	}
+}
+
+func fromPBLeaseRevokeRequest(req *pb.LeaseRevokeRequest) *kv.LeaseRevokeRequest {
+	if req == nil {
+		return nil
+	}
+
+	return &kv.LeaseRevokeRequest{
+		ID: req.Id,
+		ClientID: req.ClientId,
+		Seq: req.Seq,
+	}
+}
+func toPBLeaseRevokeResponse(resp *kv.LeaseRevokeResponse) *pb.LeaseRevokeResponse {
+	if resp == nil {
+		return &pb.LeaseRevokeResponse{}
+	}
+
+	return &pb.LeaseRevokeResponse{
+		Err: resp.Err,
+	}
+}
+
+func fromPBLeaseKeepAliveRequest(req *pb.LeaseKeepAliveRequest) *kv.LeaseKeepAliveRequest {
+	if req == nil {
+		return nil
+	}
+
+	return &kv.LeaseKeepAliveRequest{
+		ID: req.Id,
+		ClientID: req.ClientId,
+		Seq: req.Seq,
+	}
+}
+func toPBLeaseKeepAliveResponse(resp *kv.LeaseKeepAliveResponse) *pb.LeaseKeepAliveResponse {
+	if resp == nil {
+		return &pb.LeaseKeepAliveResponse{}
+	}
+
+	return &pb.LeaseKeepAliveResponse{
+		Id: resp.ID,
+		Ttl: resp.TTL,
+		Err: resp.Err,
+	}
+}
