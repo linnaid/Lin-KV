@@ -14,7 +14,6 @@ func (s *Server) makeSnapshot() []byte {
 	snap := ServerSnapshot{
 		KVSnapshot: kvSnap,
 		ClientLastSeq: s.clientLastSeq,
-		// ClientLastValue: s.clientLastValue,
 		ClientLastResult: s.clientLastResult,
 	}
 

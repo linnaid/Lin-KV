@@ -6,6 +6,7 @@ import (
 	"etcd-KV/Tools"
 	"etcd-KV/internal/api/kv/pb"
 	"etcd-KV/internal/storage/mvcc"
+	"io"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -139,12 +140,25 @@ func (r *RPCAdapter) LeaseRevoke(ctx context.Context,
 		return out, nil
 	}
 
-func (r *RPCAdapter) LeaseKeepAlive(ctx context.Context, 
-	req *pb.LeaseKeepAliveRequest) (*pb.LeaseKeepAliveResponse, error) {
-		resp, err := r.server.LeaseKeepAlive(ctx, fromPBLeaseKeepAliveRequest(req))
-		out := toPBLeaseKeepAliveResponse(resp)
-		if err != nil {
-			out.Err = err.Error()
+func (r *RPCAdapter) LeaseKeepAlive(stream pb.KV_LeaseKeepAliveServer) error {
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			return nil
 		}
-		return out, nil
+		if err != nil {
+			return err
+		}
+
+		resp, callErr := r.server.LeaseKeepAlive(stream.Context(), 
+		fromPBLeaseKeepAliveRequest(req))
+		out := toPBLeaseKeepAliveResponse(resp)
+		if callErr != nil {
+			out.Err = callErr.Error()
+		}
+
+		if err := stream.Send(out); err != nil {
+			return err
+		}
 	}
+}

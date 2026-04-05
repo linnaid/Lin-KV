@@ -161,6 +161,7 @@ func (s *Server) Get(ctx context.Context,
 		lastSeq := s.clientLastSeq[req.ClientID]
 
 		if req.Seq < lastSeq {
+			s.mu.Unlock()
 			return reply, nil
 		}
 

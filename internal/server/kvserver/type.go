@@ -44,7 +44,6 @@ type Server struct {
 
 	// 客户端去重
 	clientLastSeq 	map[int64]int64  // 最后一次执行请求的Seq
-	// clientLastValue map[int64][]byte  // 最后一次执行请求的返回值(only Get)
 	clientLastResult map[int64]Result // (All Order)
 
 	maxraftstate 	int
@@ -71,7 +70,6 @@ type Result struct {
 
 	LeaseID  int64
 	LeaseTTL int64
-	// Cmd 	command.KVCommand
 }
 
 type watcher struct {
