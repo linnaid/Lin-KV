@@ -2,31 +2,28 @@
 package command
 
 import (
-	"bytes"
-	"etcd-KV/internal/labgob"
+	commandpb "etcd-KV/internal/pb/command"
+
+	"google.golang.org/protobuf/proto"
 )
 
-func Encode(cmd interface{}) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := labgob.NewEncoder(&buf)
-
-	if err := enc.Encode(cmd); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+func Encode(cmd *Command) ([]byte, error) {
+	return proto.Marshal(toPBCommand(cmd))
 }
 
-func Decode(data []byte, v interface{}) (error) {
-	buf := bytes.NewBuffer(data)
-	dec := labgob.NewDecoder(buf)
+func Decode(data []byte, dst *Command) (error) {
+	var pbCmd commandpb.Command
 
-	// var cmd KVCommand
-	// if err := dec.Decode(&cmd); err != nil {
-	// 	return nil, err
-	// }
-	// return &cmd, nil
-	if err := dec.Decode(v); err != nil {
+	if err := proto.Unmarshal(data, &pbCmd); err != nil {
 		return err
 	}
+
+	decoded := fromPBCommand(&pbCmd)
+	if decoded == nil {
+		*dst = Command{}
+		return nil
+	}
+
+	*dst = *decoded
 	return nil
 }

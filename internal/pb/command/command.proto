@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package commandpb;
+
+option go_package = "etcd-KV/internal/pb/command; commandpb";
+
+enum Kind {
+    KIND_KV = 0;
+    KIND_TXN = 1;
+    KIND_LEASE_GRANT = 2;
+    KIND_LEASE_REVOKE = 3;
+    KIND_LEASE_KEEPALIVE = 4;
+}
+
+enum KVType {
+    KV_PUT = 0;
+    KV_GET = 1;
+    KV_DELETE = 2;
+}
+
+enum TxnCompareOp {
+    TXN_COMPARE_EQUAL = 0;
+    TXN_COMPARE_GREATER = 1;
+    TXN_COMPARE_LESS = 2;
+}
+
+enum TxnOpType {
+    TXN_OP_GET = 0;
+    TXN_OP_PUT = 1;
+    TXN_OP_DELETE = 2;
+}
+
+message KVCommand {
+    KVType type = 1;
+    string key = 2;
+    bytes value = 3;
+    int64 client_id = 4;
+    int64 seq = 5;
+    int64 rev = 6;
+    int64 lease_id = 7;
+}
+
+message TxnCompare {
+    string key = 1;
+    TxnCompareOp op = 2;
+    int64 revision = 3;
+}
+
+message TxnOp {
+    TxnOpType type = 1;
+    string key = 2;
+    bytes value = 3;
+    int64 lease_id = 4;
+}
+
+message TxnCommand {
+    repeated TxnCompare compares = 1;
+    repeated TxnOp then_ops = 2;
+    repeated TxnOp else_ops = 3;
+    int64 client_id = 4;
+    int64 seq = 5;
+}
+
+message LeaseGrantCommand {
+    int64 ttl = 1;
+    int64 client_id = 2;
+    int64 seq = 3;
+}
+
+message LeaseRevokeCommand {
+    int64 id = 1;
+    int64 client_id = 2;
+    int64 seq = 3;
+}
+
+message LeaseKeepAliveCommand {
+    int64 id = 1;
+    int64 client_id = 2;
+    int64 seq = 3;
+}
+
+message Command {
+    Kind kind = 1;
+
+    oneof body {
+        KVCommand kv = 2;
+        TxnCommand txn = 3;
+        LeaseGrantCommand lease_grant = 4;
+        LeaseRevokeCommand lease_revoke = 5;
+        LeaseKeepAliveCommand lease_keepalive = 6;
+    }
+}
