@@ -67,24 +67,26 @@ func (lm *LeaseManager) AttachKey(key string, leaseID int64) error {
 }
 
 // 延长 TTL
-func (lm *LeaseManager) KeepAlive(leaseID int64) error {
+func (lm *LeaseManager) LeaseKeepAlive(leaseID int64) (int64, error) {
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
 
 	lease, ok := lm.leases[leaseID]
 	if !ok {
-		return fmt.Errorf("Lease %d not found", leaseID)
+		return 0, fmt.Errorf("Lease %d not found", leaseID)
 	}
 
 	now := time.Now()
 
-	// if now.After(lease.ExpireAt) {
-	// 	return fmt.Errorf("Lease %d already expired", leaseID)
-	// }
+	// 已经过期了(不可复活)
+	if now.After(lease.ExpireAt) {
+		return 0, fmt.Errorf("Lease %d already expired", leaseID)
+	}
 
 	lease.ExpireAt = now.Add(time.Duration(lease.TTL) * time.Second)
 
-	return nil
+	reaming := int64(lease.ExpireAt.Sub(now).Seconds())
+	return reaming, nil
 }
 
 // 自动过期

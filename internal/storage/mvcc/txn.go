@@ -5,7 +5,7 @@ package mvcc
 import "etcd-KV/Tools"
 
 // 不可再Txn函数内调用API，避免造成死锁
-func (s *KVStore) Txn(txn Txn) []KeyValue {
+func (s *KVStore) Txn(txn Txn) (bool, []KeyValue) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -79,7 +79,7 @@ func (s *KVStore) Txn(txn Txn) []KeyValue {
 		case OpPut:
 			s.currentRev++
 
-			rev := Revision {
+			rev := Revision{
 				Main: s.currentRev,
 				Sub: 0,
 			}
@@ -105,6 +105,10 @@ func (s *KVStore) Txn(txn Txn) []KeyValue {
 
 			s.events = append(s.events, ev)
 
+			select {
+			case s.eventCh<-ev:
+			default:
+			}
 			// s.mu.Unlock()
 			// s.notifyWatchers(ev)
 			// s.mu.Lock()
@@ -140,5 +144,5 @@ func (s *KVStore) Txn(txn Txn) []KeyValue {
 		}
 	}
 
-	return result
+	return compareResult, result
 }

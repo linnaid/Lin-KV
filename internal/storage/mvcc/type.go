@@ -38,6 +38,19 @@ type KVStore struct {
 	eventCh chan Event
 }
 
+// 薄wrapper，提供更简洁的接口
+func (s *KVStore) LeaseGrant(ttl int64) int64 {
+	return s.leaseMgr.LeaseGrant(ttl)
+}
+
+func (s *KVStore) LeaseRevoke(id int64) error {
+	return s.leaseMgr.LeaseRevoke(id)
+}
+
+func (s *KVStore) LeaseKeepAlive(id int64) (int64, error) {
+	return s.leaseMgr.LeaseKeepAlive(id)
+}
+
 type Event struct {
 	Type EventType
 	Key string
@@ -94,6 +107,7 @@ type Operation struct {
 	Type OpType
 	Key string
 	Value []byte
+	LeaseID int64
 }
 
 type OpType int
