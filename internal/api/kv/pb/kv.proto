@@ -79,6 +79,7 @@ message Op {
     OpType type = 1;
     string key = 2;
     bytes value = 3;
+    int64 lease_id = 4;
 }
 
 message TxnRequest {
@@ -122,6 +123,8 @@ message WatchResponse {
 
 message LeaseGrantRequest {
     int64 ttl = 1;
+    int64 client_id = 2;
+    int64 seq = 3;
 }
 message LeaseGrantResponse {
     int64 id = 1;
@@ -130,12 +133,16 @@ message LeaseGrantResponse {
 }
 message LeaseRevokeRequest {
     int64 id = 1;
+    int64 client_id = 2;
+    int64 seq = 3;
 }
 message LeaseRevokeResponse {
     string err = 1;
 }
 message LeaseKeepAliveRequest {
     int64 id = 1;
+    int64 client_id = 2;
+    int64 seq = 3;
 }
 message LeaseKeepAliveResponse {
     int64 id = 1;

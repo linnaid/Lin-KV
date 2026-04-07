@@ -50,42 +50,13 @@ type DeleteResponse struct {
 type CompareOp int
 const (
 	CompareEqual CompareOp = iota
-	CompareLess
 	CompareGreater
+	CompareLess
 )
 type Compare struct {
 	Key 	string
 	Op 		CompareOp
 	Revision int64
-}
-
-type TxnRequest struct {
-	Compares 	[]*Compare
-	ThenOps 	[]*Op
-	ElseOps 	[]*Op
-	ClientID 	int64
-	Seq 		int64
-}
-
-type OpResult struct {
-	Type 	OpType
-	Key 	string
-	Value 	[]byte
-	Revision int64
-}
-
-type TxnResponse struct {
-	Succeeded    bool
-	Results 	 []*OpResult
-	Err 		 string
-}
-
-type TxnResult struct {
-	Results 	[]*OpResult
-}
-
-func (r *TxnResult) Get(i int) []byte {
-	return r.Results[i].Value
 }
 
 type OpType int
@@ -99,6 +70,39 @@ type Op struct {
 	Type 	OpType
 	Key 	string
 	Value 	[]byte
+	LeaseID int64
+}
+
+type KeyValue struct {
+	Key 	string
+	Value 	[]byte
+	Revision int64
+}
+
+type TxnRequest struct {
+	Compares 	[]*Compare
+	ThenOps 	[]*Op
+	ElseOps 	[]*Op
+	ClientID 	int64
+	Seq 		int64
+}
+
+type TxnResponse struct {
+	Succeeded    bool
+	Results 	 []*KeyValue
+	Err 		 string
+}
+
+type TxnResult struct {
+	Succeeded   bool
+	Results 	[]*KeyValue
+}
+
+func (r *TxnResult) Get(i int) []byte {
+	if i < 0 || i >= len(r.Results) || r.Results[i] == nil {
+		return nil
+	}
+	return r.Results[i].Value
 }
 
 type Event struct {
@@ -124,26 +128,32 @@ type WatchResponse struct {
 }
 
 type LeaseGrantRequest struct {
-	ttl int64
+	TTL int64
+	ClientID int64
+	Seq int64
 }
 type LeaseGrantResponse struct {
-	id int64
-	ttl int64
-	err string
+	ID int64
+	TTL int64
+	Err string
 }
 
 type LeaseRevokeRequest struct {
-	id int64
+	ID int64
+	ClientID int64
+	Seq int64
 }
 type LeaseRevokeResponse struct {
-	err string
+	Err string
 }
 
 type LeaseKeepAliveRequest struct {
-	id int64
+	ID int64
+	ClientID int64
+	Seq int64
 }
 type LeaseKeepAliveResponse struct {
-	id int64
-	ttl int64
-	err string
+	ID int64
+	TTL int64
+	Err string
 }
