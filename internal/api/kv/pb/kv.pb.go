@@ -576,6 +576,7 @@ type Op struct {
 	Type          OpType                 `protobuf:"varint,1,opt,name=type,proto3,enum=pb.OpType" json:"type,omitempty"`
 	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
 	Value         []byte                 `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	LeaseId       int64                  `protobuf:"varint,4,opt,name=lease_id,json=leaseId,proto3" json:"lease_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -629,6 +630,13 @@ func (x *Op) GetValue() []byte {
 		return x.Value
 	}
 	return nil
+}
+
+func (x *Op) GetLeaseId() int64 {
+	if x != nil {
+		return x.LeaseId
+	}
+	return 0
 }
 
 type TxnRequest struct {
@@ -1034,6 +1042,8 @@ func (x *WatchResponse) GetErr() string {
 type LeaseGrantRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ttl           int64                  `protobuf:"varint,1,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	ClientId      int64                  `protobuf:"varint,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	Seq           int64                  `protobuf:"varint,3,opt,name=seq,proto3" json:"seq,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1071,6 +1081,20 @@ func (*LeaseGrantRequest) Descriptor() ([]byte, []int) {
 func (x *LeaseGrantRequest) GetTtl() int64 {
 	if x != nil {
 		return x.Ttl
+	}
+	return 0
+}
+
+func (x *LeaseGrantRequest) GetClientId() int64 {
+	if x != nil {
+		return x.ClientId
+	}
+	return 0
+}
+
+func (x *LeaseGrantRequest) GetSeq() int64 {
+	if x != nil {
+		return x.Seq
 	}
 	return 0
 }
@@ -1138,6 +1162,8 @@ func (x *LeaseGrantResponse) GetErr() string {
 type LeaseRevokeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	ClientId      int64                  `protobuf:"varint,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	Seq           int64                  `protobuf:"varint,3,opt,name=seq,proto3" json:"seq,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1175,6 +1201,20 @@ func (*LeaseRevokeRequest) Descriptor() ([]byte, []int) {
 func (x *LeaseRevokeRequest) GetId() int64 {
 	if x != nil {
 		return x.Id
+	}
+	return 0
+}
+
+func (x *LeaseRevokeRequest) GetClientId() int64 {
+	if x != nil {
+		return x.ClientId
+	}
+	return 0
+}
+
+func (x *LeaseRevokeRequest) GetSeq() int64 {
+	if x != nil {
+		return x.Seq
 	}
 	return 0
 }
@@ -1226,6 +1266,8 @@ func (x *LeaseRevokeResponse) GetErr() string {
 type LeaseKeepAliveRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	ClientId      int64                  `protobuf:"varint,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	Seq           int64                  `protobuf:"varint,3,opt,name=seq,proto3" json:"seq,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1263,6 +1305,20 @@ func (*LeaseKeepAliveRequest) Descriptor() ([]byte, []int) {
 func (x *LeaseKeepAliveRequest) GetId() int64 {
 	if x != nil {
 		return x.Id
+	}
+	return 0
+}
+
+func (x *LeaseKeepAliveRequest) GetClientId() int64 {
+	if x != nil {
+		return x.ClientId
+	}
+	return 0
+}
+
+func (x *LeaseKeepAliveRequest) GetSeq() int64 {
+	if x != nil {
+		return x.Seq
 	}
 	return 0
 }
@@ -1365,12 +1421,13 @@ const file_kv_proto_rawDesc = "" +
 	"\aCompare\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x1d\n" +
 	"\x02op\x18\x02 \x01(\x0e2\r.pb.CompareOpR\x02op\x12\x10\n" +
-	"\x03rev\x18\x03 \x01(\x03R\x03rev\"L\n" +
+	"\x03rev\x18\x03 \x01(\x03R\x03rev\"g\n" +
 	"\x02Op\x12\x1e\n" +
 	"\x04type\x18\x01 \x01(\x0e2\n" +
 	".pb.OpTypeR\x04type\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x03 \x01(\fR\x05value\"\xaa\x01\n" +
+	"\x05value\x18\x03 \x01(\fR\x05value\x12\x19\n" +
+	"\blease_id\x18\x04 \x01(\x03R\aleaseId\"\xaa\x01\n" +
 	"\n" +
 	"TxnRequest\x12'\n" +
 	"\bcompares\x18\x01 \x03(\v2\v.pb.CompareR\bcompares\x12!\n" +
@@ -1400,19 +1457,25 @@ const file_kv_proto_rawDesc = "" +
 	"\rWatchResponse\x12!\n" +
 	"\x06events\x18\x01 \x03(\v2\t.pb.EventR\x06events\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x03R\brevision\x12\x10\n" +
-	"\x03err\x18\x03 \x01(\tR\x03err\"%\n" +
+	"\x03err\x18\x03 \x01(\tR\x03err\"T\n" +
 	"\x11LeaseGrantRequest\x12\x10\n" +
-	"\x03ttl\x18\x01 \x01(\x03R\x03ttl\"H\n" +
+	"\x03ttl\x18\x01 \x01(\x03R\x03ttl\x12\x1b\n" +
+	"\tclient_id\x18\x02 \x01(\x03R\bclientId\x12\x10\n" +
+	"\x03seq\x18\x03 \x01(\x03R\x03seq\"H\n" +
 	"\x12LeaseGrantResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x10\n" +
 	"\x03ttl\x18\x02 \x01(\x03R\x03ttl\x12\x10\n" +
-	"\x03err\x18\x03 \x01(\tR\x03err\"$\n" +
+	"\x03err\x18\x03 \x01(\tR\x03err\"S\n" +
 	"\x12LeaseRevokeRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\"'\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1b\n" +
+	"\tclient_id\x18\x02 \x01(\x03R\bclientId\x12\x10\n" +
+	"\x03seq\x18\x03 \x01(\x03R\x03seq\"'\n" +
 	"\x13LeaseRevokeResponse\x12\x10\n" +
-	"\x03err\x18\x01 \x01(\tR\x03err\"'\n" +
+	"\x03err\x18\x01 \x01(\tR\x03err\"V\n" +
 	"\x15LeaseKeepAliveRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\"L\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1b\n" +
+	"\tclient_id\x18\x02 \x01(\x03R\bclientId\x12\x10\n" +
+	"\x03seq\x18\x03 \x01(\x03R\x03seq\"L\n" +
 	"\x16LeaseKeepAliveResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x10\n" +
 	"\x03err\x18\x02 \x01(\tR\x03err\x12\x10\n" +
