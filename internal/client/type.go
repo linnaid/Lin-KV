@@ -22,7 +22,9 @@ type Client struct {
 
 type Txn struct {
 	client   *Client
-	ops 	[]*kv.Op
+	compares []*kv.Compare
+	thenOps  []*kv.Op
+	elseOps  []*kv.Op
 }
 
 

@@ -8,12 +8,13 @@ import (
 func (c *Client) BeginTxn() *Txn {
 	return &Txn{
 		client: c,
-		ops: make([]*kv.Op, 0),
+		thenOps: make([]*kv.Op, 0),
+		elseOps: make([]*kv.Op, 0),
 	}
 }
 
 func (t *Txn) Put(key string, value []byte) {
-	t.ops = append(t.ops, &kv.Op{
+	t.thenOps = append(t.thenOps, &kv.Op{
 		Type: kv.OpPut,
 		Key: key,
 		Value: value,
@@ -21,7 +22,7 @@ func (t *Txn) Put(key string, value []byte) {
 }
 
 func (t *Txn) Get(key string) {
-	t.ops = append(t.ops, &kv.Op{
+	t.thenOps = append(t.thenOps, &kv.Op{
 		Type: kv.OpGet,
 		Key: key,
 	})
@@ -31,7 +32,8 @@ func (t *Txn) Commit(ctx context.Context) (*kv.TxnResult, error) {
 	seq := t.client.getSeq()
 
 	req := &kv.TxnRequest{
-		Ops: t.ops,
+		ThenOps: t.thenOps,
+		ElseOps: t.elseOps,
 		ClientID: t.client.clientID,
 		Seq: seq,
 	}
@@ -65,6 +67,7 @@ func (t *Txn) Commit(ctx context.Context) (*kv.TxnResult, error) {
 	}
 	
 	return &kv.TxnResult{
+		Succeeded: finalReply.Succeeded,
 		Results: finalReply.Results,
 	}, nil
 }
