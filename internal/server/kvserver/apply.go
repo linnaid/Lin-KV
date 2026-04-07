@@ -4,7 +4,10 @@ package kvserver
 import (
 	"etcd-KV/Tools"
 	"etcd-KV/internal/command"
+	"etcd-KV/internal/pb/kvserverpb"
 	"fmt"
+
+	"google.golang.org/protobuf/proto"
 )
 
 func (s *Server) applyLoop() {
@@ -92,20 +95,35 @@ func (s *Server) applyLoop() {
 }
 
 func (s *Server) restoreSnapshot(data []byte) {
-	var snap ServerSnapshot
+	var pbsnap kvserverpb.ServerSnapshot
 
-	err := command.Decode(data, &snap)
+	err := proto.Unmarshal(data, &pbsnap)
 	if err != nil {
-		Tools.Debug("SnapshotRestore error")
+		Tools.Debug("SnapshotRestore error", err.Error())
 		panic(err)
 	}
+
+	snap := fromPBServerSnapshot(&pbsnap)
+
+	s.clearWaitCh(ErrNotLeader)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.store.Restore(snap.KVSnapshot)
+
+	if snap.ClientLastSeq == nil {
+		snap.ClientLastSeq = map[int64]int64{}
+	}
+	if snap.ClientLastResult == nil {
+		snap.ClientLastResult = map[int64]Result{}
+	}
+
 	s.clientLastSeq = snap.ClientLastSeq
 	s.clientLastResult = snap.ClientLastResult
+
+	s.LastResult = map[int64]Result{}
+	s.waitCh = map[int64]*waitEntry{}
 }
 
 func (s *Server) applyCommand(env *command.Command) Result {

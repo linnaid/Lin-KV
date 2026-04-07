@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package kvserverpb;
+
+option go_package = "etcd-KV/internal/pb/kvserverpb";
+
+message Revision {
+    int64 main = 1;
+    int64 sub = 2;
+}
+
+message KeyValue {
+    string key = 1;
+    bytes value = 2;
+    int64 revision = 3;
+}
+
+enum Kind {
+    KIND_KV = 0;
+    KIND_TXN = 1;
+    KIND_LEASE_GRANT = 2;
+    KIND_LEASE_REVOKE = 3;
+    KIND_LEASE_KEEPALIVE = 4;
+}
+
+message Result {
+    Kind kind = 1;
+    int64 client_id = 2;
+    int64 seq = 3;
+    string err = 4;
+    Revision rev = 5;
+    bytes value = 6;
+    bool found = 7;
+    bool txn_succeeded = 8;
+    repeated KeyValue txn_results = 9;
+    int64 lease_id = 10;
+    int64 lease_ttl = 11;
+}
+
+message ServerSnapshot {
+    bytes kv_snapshot = 1;
+    map<int64, int64> client_last_seq = 2;
+    map<int64, Result> client_last_result = 3;
+}

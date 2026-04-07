@@ -1,23 +1,23 @@
 package kvserver
 
 import (
-	"etcd-KV/internal/command"
-
+	"google.golang.org/protobuf/proto"
 )
 
 func (s *Server) makeSnapshot() []byte {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	kvSnap := s.store.Snapshot()
 
 	snap := ServerSnapshot{
-		KVSnapshot: kvSnap,
-		ClientLastSeq: s.clientLastSeq,
-		ClientLastResult: s.clientLastResult,
+		KVSnapshot: append([]byte(nil), kvSnap...),
+		ClientLastSeq: cloneSeqMap(s.clientLastSeq),
+		ClientLastResult: cloneResultMap(s.clientLastResult),
 	}
 
-	data, err := command.Encode(&snap)
+	s.mu.Unlock()
+
+	data, err := proto.Marshal(toPBServerSnapshot(snap))
 	if err != nil {
 		panic(err)
 	}
