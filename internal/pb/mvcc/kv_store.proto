@@ -6,7 +6,12 @@ option go_package = "etcd-KV/internal/pb/mvcc";
 
 message Snapshot {
     int64 current_rev = 1;
-    repeated KeyEntry entries = 2;
+    int64 compact_rev = 2;
+    repeated KeyEntry entries = 3;
+    repeated Event events = 4;
+    repeated Lease leases = 5;
+    map<string, int64> key_lease = 6;
+    int64 next_lease_id = 7;
 }
 
 message KeyEntry {
@@ -23,4 +28,24 @@ message ValueRevision {
 message Revision {
     int64 main = 1;
     int64 sub = 2;
+}
+
+enum EventType {
+    EVENT_PUT = 0;
+    EVENT_DELETE = 1;
+}
+
+message Event {
+    EventType type = 1;
+    string key = 2;
+    bytes value = 3;
+    Revision rev = 4;
+}
+
+message Lease {
+    int64 id = 1;
+    int64 ttl = 2;
+    // 租约的绝对过期时间(纳秒级 Unix 时间戳)
+    int64 expire_at_unix_nano = 3;
+    repeated string keys = 4;
 }
