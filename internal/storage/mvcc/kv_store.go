@@ -9,6 +9,12 @@ import (
 )
 
 func NewKVStore() *KVStore {
+	return NewKVStoreWithOptions(StoreOptions{
+		LeaseExpireMode: LeaseExpireLocal,
+	})
+}
+
+func NewKVStoreWithOptions(opts StoreOptions) *KVStore {
 	kv := &KVStore{
 		data: make(map[string][]ValueRevision),
 
@@ -28,7 +34,9 @@ func NewKVStore() *KVStore {
 	kv.leaseMgr = leaseMgr
 
 	// 开始循环leaseMgr，自动过期清理
-	go leaseMgr.expirationLoop()
+	if opts.LeaseExpireMode == LeaseExpireLocal {
+		go leaseMgr.expirationLoop()
+	}
 
 	go kv.dispatcherLoop()
 
@@ -177,8 +185,15 @@ func (s *KVStore) Get(k string, rev int64) ([]byte, int64, bool) {
 
 func (s *KVStore) Delete(k string) Revision {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	rev, ev := s.deleteLocked(k)
+	s.mu.Unlock()
 
+	s.eventCh <- ev
+
+	return rev
+}
+
+func (s *KVStore) deleteLocked(k string) (Revision, Event) {
 	s.currentRev++
 	rev := Revision{
 		Main: s.currentRev,
@@ -198,16 +213,9 @@ func (s *KVStore) Delete(k string) Revision {
 	}
 
 	s.events = append(s.events, ev)
-
-	// select {
-	// case s.eventCh<-ev:
-	// default:
-	// }
-	s.eventCh <- ev
-
 	delete(s.keyLease, k)
 
-	return rev
+	return rev, ev
 }
 
 func (s *KVStore) Restore(snapshot []byte) {
@@ -237,10 +245,6 @@ func (s *KVStore) Restore(snapshot []byte) {
 
 	for _, e := range entries {
 		for _, rev := range e.Revisions {
-			// if _, ok := seen[rev.Rev.Main]; ok {
-			// 	Tools.Error("duplicate revision(重复Revision)", rev.Rev.Main)
-			// 	return
-			// }
 			if rev.Rev.Main <= 0 {
 				Tools.Error("invalid revision(非法Revision)", rev.Rev.Main)
 			}
@@ -284,10 +288,38 @@ func (s *KVStore) Restore(snapshot []byte) {
 		dataMap[key] = newSlice
 	}
 
+	events := make([]Event, 0, len(snap.Events))
+	for _, ev := range snap.Events {
+		if ev == nil || ev.Rev == nil {
+			continue
+		}
+		events = append(events, Event{
+			Type: EventType(ev.Type),
+			Key: ev.Key,
+			Value: append([]byte(nil), ev.Value...),
+			Rev: Revision{
+				Main: ev.Rev.Main,
+				Sub: ev.Rev.Sub,
+			},
+		})
+	}
+
+	keylease := make(map[string]int64, len(snap.KeyLease))
+	for k, leaseID := range snap.KeyLease {
+		keylease[k] = leaseID
+	}
+
+	leases := s.leaseMgr.restore(snap.Leases)
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.data = dataMap
 	s.currentRev = snap.CurrentRev
+	s.compactRev = snap.CompactRev
+	s.events = events
+	s.keyLease = keylease
+	s.leaseMgr.nextLeaseID = snap.NextLeaseId
+	s.leaseMgr.leases = leases
 
 	// TODO: decode snapshot into kv state
 }
@@ -316,7 +348,37 @@ func (s *KVStore) Snapshot() []byte {
 		newMap[k] = newSlice
 	}
 
+	events := make([]*mvcc.Event, 0, len(s.events))
+	for _, ev := range s.events {
+		events = append(events, &mvcc.Event{
+			Type: mvcc.EventType(ev.Type),
+			Key: ev.Key,
+			Value: append([]byte(nil), ev.Value...),
+			Rev: &mvcc.Revision{
+				Main: ev.Rev.Main,
+				Sub: ev.Rev.Sub,
+			},
+		})
+	}
+	sort.Slice(events, func(i, j int) bool {
+		a := events[i].Rev
+		b := events[j].Rev
+
+		if a.Main != b.Main {
+			return a.Main < b.Main
+		}
+		return a.Sub < b.Sub
+	})
+
+	keylease := make(map[string]int64, len(s.keyLease))
+	for k, leaseID := range s.keyLease {
+		keylease[k] = leaseID
+	}
+
+	leases, nextLeaseID := s.leaseMgr.snapshot()
+
 	currentRev := s.currentRev
+	compactRev := s.compactRev
 
 	s.mu.RUnlock()
 
@@ -364,7 +426,12 @@ func (s *KVStore) Snapshot() []byte {
 
 	snap := &mvcc.Snapshot{
 		CurrentRev: currentRev,
+		CompactRev: compactRev,
 		Entries:    entries,
+		Events: 	events,
+		Leases: 	leases,
+		KeyLease: 	keylease,
+		NextLeaseId: nextLeaseID,
 	}
 
 	// 序列化

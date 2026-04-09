@@ -46,3 +46,14 @@ func GetReplyError(reply interface{}) error {
 		return errors.New("reply 不是任何一种结构体(raft/util.go)")
 	}
 }
+
+func (rf *Raft) SnapshotBytes() []byte {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	if len(rf.snapshot) == 0 {
+		return nil
+	}
+
+	return append([]byte(nil), rf.snapshot...)
+}

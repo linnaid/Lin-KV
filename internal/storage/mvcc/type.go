@@ -133,7 +133,7 @@ type Lease struct {
 }
 
 type LeaseManager struct {
-	mu sync.Mutex
+	// mu sync.Mutex
 	leases map[int64]*Lease
 	kv *KVStore
 	nextLeaseID int64
@@ -143,4 +143,15 @@ type KV interface {
 	Put(k string, v []byte)
 	Get(k string) ([]byte, bool)
 	Delete(k string)
+}
+
+type LeaseExpireMode uint8
+
+const (
+	LeaseExpireLocal LeaseExpireMode = iota
+	LeaseExpireExternal
+)
+
+type StoreOptions struct {
+	LeaseExpireMode LeaseExpireMode
 }
