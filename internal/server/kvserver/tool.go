@@ -190,3 +190,7 @@ func fromMVCCKeyValues(items []mvcc.KeyValue) []*kv.KeyValue {
 
 	return out
 }
+
+func internalLeaseRevokeClientID(leaseID int64) int64 {
+	return -leaseID - 1
+}

@@ -16,24 +16,29 @@ func NewServer(
 	store *mvcc.KVStore, 
 	applyCh chan raft.ApplyMsg) *Server {
 
-		s := &Server{
-			id: id,
-			raft: raft,
-			store: store,
-			applyCh: applyCh,
-			waitCh: make(map[int64]*waitEntry),
-			LastResult: map[int64]Result{},
+	s := &Server{
+		id: id,
+		raft: raft,
+		store: store,
+		applyCh: applyCh,
+		waitCh: make(map[int64]*waitEntry),
+		LastResult: map[int64]Result{},
 
-			clientLastSeq: make(map[int64]int64),
-			clientLastResult: make(map[int64]Result),
+		clientLastSeq: make(map[int64]int64),
+		clientLastResult: make(map[int64]Result),
 
-			maxraftstate: 100,
+		maxraftstate: 100,
 
-			watchers: make(map[string][]*watcher),
-		}
+		watchers: make(map[string][]*watcher),
+	}
+
+	if snap := raft.SnapshotBytes(); len(snap) > 0 {
+		s.restoreSnapshot(snap)
+	}
 
 	// 开始循环接收
 	go s.applyLoop()
+	go s.leaseReaperLoop()
 
 	go func() {
 		for event := range raft.RoleCh() {
@@ -323,3 +328,33 @@ func (s *Server) LeaseKeepAlive(ctx context.Context,
 
 		return resp, err
 	}
+
+func (s *Server) leaseReaperLoop() {
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if _, isLeader := s.raft.GetState(); !isLeader {
+			continue
+		}
+
+		expired := s.store.ExpiredLeaseIDs(time.Now(), 1)
+		for _, leaseID := range expired {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			_, err := s.submit(ctx, &command.Command{
+				Kind: command.KindLeaseRevoke,
+				LeaseRevoke: &command.LeaseRevokeCommand{
+					ID: leaseID,
+					ClientID: internalLeaseRevokeClientID(leaseID),
+					Seq: 1,
+				},
+			})
+
+			cancel()
+
+			if err == ErrNotLeader {
+				break
+			}
+		}
+	}
+}
