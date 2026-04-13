@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v3.21.12
-// source: mvcc/kv_store.proto
+// source: kv_store.proto
 
 package mvcc
 
@@ -21,17 +21,68 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type EventType int32
+
+const (
+	EventType_EVENT_PUT    EventType = 0
+	EventType_EVENT_DELETE EventType = 1
+)
+
+// Enum value maps for EventType.
+var (
+	EventType_name = map[int32]string{
+		0: "EVENT_PUT",
+		1: "EVENT_DELETE",
+	}
+	EventType_value = map[string]int32{
+		"EVENT_PUT":    0,
+		"EVENT_DELETE": 1,
+	}
+)
+
+func (x EventType) Enum() *EventType {
+	p := new(EventType)
+	*p = x
+	return p
+}
+
+func (x EventType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EventType) Descriptor() protoreflect.EnumDescriptor {
+	return file_kv_store_proto_enumTypes[0].Descriptor()
+}
+
+func (EventType) Type() protoreflect.EnumType {
+	return &file_kv_store_proto_enumTypes[0]
+}
+
+func (x EventType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EventType.Descriptor instead.
+func (EventType) EnumDescriptor() ([]byte, []int) {
+	return file_kv_store_proto_rawDescGZIP(), []int{0}
+}
+
 type Snapshot struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	CurrentRev    int64                  `protobuf:"varint,1,opt,name=current_rev,json=currentRev,proto3" json:"current_rev,omitempty"`
-	Entries       []*KeyEntry            `protobuf:"bytes,2,rep,name=entries,proto3" json:"entries,omitempty"`
+	CompactRev    int64                  `protobuf:"varint,2,opt,name=compact_rev,json=compactRev,proto3" json:"compact_rev,omitempty"`
+	Entries       []*KeyEntry            `protobuf:"bytes,3,rep,name=entries,proto3" json:"entries,omitempty"`
+	Events        []*Event               `protobuf:"bytes,4,rep,name=events,proto3" json:"events,omitempty"`
+	Leases        []*Lease               `protobuf:"bytes,5,rep,name=leases,proto3" json:"leases,omitempty"`
+	KeyLease      map[string]int64       `protobuf:"bytes,6,rep,name=key_lease,json=keyLease,proto3" json:"key_lease,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	NextLeaseId   int64                  `protobuf:"varint,7,opt,name=next_lease_id,json=nextLeaseId,proto3" json:"next_lease_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Snapshot) Reset() {
 	*x = Snapshot{}
-	mi := &file_mvcc_kv_store_proto_msgTypes[0]
+	mi := &file_kv_store_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -43,7 +94,7 @@ func (x *Snapshot) String() string {
 func (*Snapshot) ProtoMessage() {}
 
 func (x *Snapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_mvcc_kv_store_proto_msgTypes[0]
+	mi := &file_kv_store_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56,7 +107,7 @@ func (x *Snapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Snapshot.ProtoReflect.Descriptor instead.
 func (*Snapshot) Descriptor() ([]byte, []int) {
-	return file_mvcc_kv_store_proto_rawDescGZIP(), []int{0}
+	return file_kv_store_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Snapshot) GetCurrentRev() int64 {
@@ -66,11 +117,46 @@ func (x *Snapshot) GetCurrentRev() int64 {
 	return 0
 }
 
+func (x *Snapshot) GetCompactRev() int64 {
+	if x != nil {
+		return x.CompactRev
+	}
+	return 0
+}
+
 func (x *Snapshot) GetEntries() []*KeyEntry {
 	if x != nil {
 		return x.Entries
 	}
 	return nil
+}
+
+func (x *Snapshot) GetEvents() []*Event {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+func (x *Snapshot) GetLeases() []*Lease {
+	if x != nil {
+		return x.Leases
+	}
+	return nil
+}
+
+func (x *Snapshot) GetKeyLease() map[string]int64 {
+	if x != nil {
+		return x.KeyLease
+	}
+	return nil
+}
+
+func (x *Snapshot) GetNextLeaseId() int64 {
+	if x != nil {
+		return x.NextLeaseId
+	}
+	return 0
 }
 
 type KeyEntry struct {
@@ -83,7 +169,7 @@ type KeyEntry struct {
 
 func (x *KeyEntry) Reset() {
 	*x = KeyEntry{}
-	mi := &file_mvcc_kv_store_proto_msgTypes[1]
+	mi := &file_kv_store_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -95,7 +181,7 @@ func (x *KeyEntry) String() string {
 func (*KeyEntry) ProtoMessage() {}
 
 func (x *KeyEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_mvcc_kv_store_proto_msgTypes[1]
+	mi := &file_kv_store_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -108,7 +194,7 @@ func (x *KeyEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KeyEntry.ProtoReflect.Descriptor instead.
 func (*KeyEntry) Descriptor() ([]byte, []int) {
-	return file_mvcc_kv_store_proto_rawDescGZIP(), []int{1}
+	return file_kv_store_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *KeyEntry) GetKey() string {
@@ -136,7 +222,7 @@ type ValueRevision struct {
 
 func (x *ValueRevision) Reset() {
 	*x = ValueRevision{}
-	mi := &file_mvcc_kv_store_proto_msgTypes[2]
+	mi := &file_kv_store_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -148,7 +234,7 @@ func (x *ValueRevision) String() string {
 func (*ValueRevision) ProtoMessage() {}
 
 func (x *ValueRevision) ProtoReflect() protoreflect.Message {
-	mi := &file_mvcc_kv_store_proto_msgTypes[2]
+	mi := &file_kv_store_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -161,7 +247,7 @@ func (x *ValueRevision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValueRevision.ProtoReflect.Descriptor instead.
 func (*ValueRevision) Descriptor() ([]byte, []int) {
-	return file_mvcc_kv_store_proto_rawDescGZIP(), []int{2}
+	return file_kv_store_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ValueRevision) GetRev() *Revision {
@@ -195,7 +281,7 @@ type Revision struct {
 
 func (x *Revision) Reset() {
 	*x = Revision{}
-	mi := &file_mvcc_kv_store_proto_msgTypes[3]
+	mi := &file_kv_store_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -207,7 +293,7 @@ func (x *Revision) String() string {
 func (*Revision) ProtoMessage() {}
 
 func (x *Revision) ProtoReflect() protoreflect.Message {
-	mi := &file_mvcc_kv_store_proto_msgTypes[3]
+	mi := &file_kv_store_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -220,7 +306,7 @@ func (x *Revision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Revision.ProtoReflect.Descriptor instead.
 func (*Revision) Descriptor() ([]byte, []int) {
-	return file_mvcc_kv_store_proto_rawDescGZIP(), []int{3}
+	return file_kv_store_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Revision) GetMain() int64 {
@@ -237,15 +323,161 @@ func (x *Revision) GetSub() int64 {
 	return 0
 }
 
-var File_mvcc_kv_store_proto protoreflect.FileDescriptor
+type Event struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Type          EventType              `protobuf:"varint,1,opt,name=type,proto3,enum=mvcc.EventType" json:"type,omitempty"`
+	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	Value         []byte                 `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	Rev           *Revision              `protobuf:"bytes,4,opt,name=rev,proto3" json:"rev,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
 
-const file_mvcc_kv_store_proto_rawDesc = "" +
+func (x *Event) Reset() {
+	*x = Event{}
+	mi := &file_kv_store_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Event) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Event) ProtoMessage() {}
+
+func (x *Event) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_store_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Event.ProtoReflect.Descriptor instead.
+func (*Event) Descriptor() ([]byte, []int) {
+	return file_kv_store_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *Event) GetType() EventType {
+	if x != nil {
+		return x.Type
+	}
+	return EventType_EVENT_PUT
+}
+
+func (x *Event) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *Event) GetValue() []byte {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+func (x *Event) GetRev() *Revision {
+	if x != nil {
+		return x.Rev
+	}
+	return nil
+}
+
+type Lease struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Ttl   int64                  `protobuf:"varint,2,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	// 租约的绝对过期时间(纳秒级 Unix 时间戳)
+	ExpireAtUnixNano int64    `protobuf:"varint,3,opt,name=expire_at_unix_nano,json=expireAtUnixNano,proto3" json:"expire_at_unix_nano,omitempty"`
+	Keys             []string `protobuf:"bytes,4,rep,name=keys,proto3" json:"keys,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *Lease) Reset() {
+	*x = Lease{}
+	mi := &file_kv_store_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Lease) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Lease) ProtoMessage() {}
+
+func (x *Lease) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_store_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Lease.ProtoReflect.Descriptor instead.
+func (*Lease) Descriptor() ([]byte, []int) {
+	return file_kv_store_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *Lease) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *Lease) GetTtl() int64 {
+	if x != nil {
+		return x.Ttl
+	}
+	return 0
+}
+
+func (x *Lease) GetExpireAtUnixNano() int64 {
+	if x != nil {
+		return x.ExpireAtUnixNano
+	}
+	return 0
+}
+
+func (x *Lease) GetKeys() []string {
+	if x != nil {
+		return x.Keys
+	}
+	return nil
+}
+
+var File_kv_store_proto protoreflect.FileDescriptor
+
+const file_kv_store_proto_rawDesc = "" +
 	"\n" +
-	"\x13mvcc/kv_store.proto\x12\x04mvcc\"U\n" +
+	"\x0ekv_store.proto\x12\x04mvcc\"\xdc\x02\n" +
 	"\bSnapshot\x12\x1f\n" +
 	"\vcurrent_rev\x18\x01 \x01(\x03R\n" +
-	"currentRev\x12(\n" +
-	"\aentries\x18\x02 \x03(\v2\x0e.mvcc.KeyEntryR\aentries\"O\n" +
+	"currentRev\x12\x1f\n" +
+	"\vcompact_rev\x18\x02 \x01(\x03R\n" +
+	"compactRev\x12(\n" +
+	"\aentries\x18\x03 \x03(\v2\x0e.mvcc.KeyEntryR\aentries\x12#\n" +
+	"\x06events\x18\x04 \x03(\v2\v.mvcc.EventR\x06events\x12#\n" +
+	"\x06leases\x18\x05 \x03(\v2\v.mvcc.LeaseR\x06leases\x129\n" +
+	"\tkey_lease\x18\x06 \x03(\v2\x1c.mvcc.Snapshot.KeyLeaseEntryR\bkeyLease\x12\"\n" +
+	"\rnext_lease_id\x18\a \x01(\x03R\vnextLeaseId\x1a;\n" +
+	"\rKeyLeaseEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"O\n" +
 	"\bKeyEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x121\n" +
 	"\trevisions\x18\x02 \x03(\v2\x13.mvcc.ValueRevisionR\trevisions\"a\n" +
@@ -255,58 +487,82 @@ const file_mvcc_kv_store_proto_rawDesc = "" +
 	"\adeleted\x18\x03 \x01(\bR\adeleted\"0\n" +
 	"\bRevision\x12\x12\n" +
 	"\x04main\x18\x01 \x01(\x03R\x04main\x12\x10\n" +
-	"\x03sub\x18\x02 \x01(\x03R\x03subB\x1aZ\x18etcd-KV/internal/pb/mvccb\x06proto3"
+	"\x03sub\x18\x02 \x01(\x03R\x03sub\"v\n" +
+	"\x05Event\x12#\n" +
+	"\x04type\x18\x01 \x01(\x0e2\x0f.mvcc.EventTypeR\x04type\x12\x10\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x03 \x01(\fR\x05value\x12 \n" +
+	"\x03rev\x18\x04 \x01(\v2\x0e.mvcc.RevisionR\x03rev\"l\n" +
+	"\x05Lease\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x10\n" +
+	"\x03ttl\x18\x02 \x01(\x03R\x03ttl\x12-\n" +
+	"\x13expire_at_unix_nano\x18\x03 \x01(\x03R\x10expireAtUnixNano\x12\x12\n" +
+	"\x04keys\x18\x04 \x03(\tR\x04keys*,\n" +
+	"\tEventType\x12\r\n" +
+	"\tEVENT_PUT\x10\x00\x12\x10\n" +
+	"\fEVENT_DELETE\x10\x01B\x1aZ\x18etcd-KV/internal/pb/mvccb\x06proto3"
 
 var (
-	file_mvcc_kv_store_proto_rawDescOnce sync.Once
-	file_mvcc_kv_store_proto_rawDescData []byte
+	file_kv_store_proto_rawDescOnce sync.Once
+	file_kv_store_proto_rawDescData []byte
 )
 
-func file_mvcc_kv_store_proto_rawDescGZIP() []byte {
-	file_mvcc_kv_store_proto_rawDescOnce.Do(func() {
-		file_mvcc_kv_store_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_mvcc_kv_store_proto_rawDesc), len(file_mvcc_kv_store_proto_rawDesc)))
+func file_kv_store_proto_rawDescGZIP() []byte {
+	file_kv_store_proto_rawDescOnce.Do(func() {
+		file_kv_store_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_kv_store_proto_rawDesc), len(file_kv_store_proto_rawDesc)))
 	})
-	return file_mvcc_kv_store_proto_rawDescData
+	return file_kv_store_proto_rawDescData
 }
 
-var file_mvcc_kv_store_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
-var file_mvcc_kv_store_proto_goTypes = []any{
-	(*Snapshot)(nil),      // 0: mvcc.Snapshot
-	(*KeyEntry)(nil),      // 1: mvcc.KeyEntry
-	(*ValueRevision)(nil), // 2: mvcc.ValueRevision
-	(*Revision)(nil),      // 3: mvcc.Revision
+var file_kv_store_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_kv_store_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_kv_store_proto_goTypes = []any{
+	(EventType)(0),        // 0: mvcc.EventType
+	(*Snapshot)(nil),      // 1: mvcc.Snapshot
+	(*KeyEntry)(nil),      // 2: mvcc.KeyEntry
+	(*ValueRevision)(nil), // 3: mvcc.ValueRevision
+	(*Revision)(nil),      // 4: mvcc.Revision
+	(*Event)(nil),         // 5: mvcc.Event
+	(*Lease)(nil),         // 6: mvcc.Lease
+	nil,                   // 7: mvcc.Snapshot.KeyLeaseEntry
 }
-var file_mvcc_kv_store_proto_depIdxs = []int32{
-	1, // 0: mvcc.Snapshot.entries:type_name -> mvcc.KeyEntry
-	2, // 1: mvcc.KeyEntry.revisions:type_name -> mvcc.ValueRevision
-	3, // 2: mvcc.ValueRevision.rev:type_name -> mvcc.Revision
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+var file_kv_store_proto_depIdxs = []int32{
+	2, // 0: mvcc.Snapshot.entries:type_name -> mvcc.KeyEntry
+	5, // 1: mvcc.Snapshot.events:type_name -> mvcc.Event
+	6, // 2: mvcc.Snapshot.leases:type_name -> mvcc.Lease
+	7, // 3: mvcc.Snapshot.key_lease:type_name -> mvcc.Snapshot.KeyLeaseEntry
+	3, // 4: mvcc.KeyEntry.revisions:type_name -> mvcc.ValueRevision
+	4, // 5: mvcc.ValueRevision.rev:type_name -> mvcc.Revision
+	0, // 6: mvcc.Event.type:type_name -> mvcc.EventType
+	4, // 7: mvcc.Event.rev:type_name -> mvcc.Revision
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
-func init() { file_mvcc_kv_store_proto_init() }
-func file_mvcc_kv_store_proto_init() {
-	if File_mvcc_kv_store_proto != nil {
+func init() { file_kv_store_proto_init() }
+func file_kv_store_proto_init() {
+	if File_kv_store_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mvcc_kv_store_proto_rawDesc), len(file_mvcc_kv_store_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   4,
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kv_store_proto_rawDesc), len(file_kv_store_proto_rawDesc)),
+			NumEnums:      1,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_mvcc_kv_store_proto_goTypes,
-		DependencyIndexes: file_mvcc_kv_store_proto_depIdxs,
-		MessageInfos:      file_mvcc_kv_store_proto_msgTypes,
+		GoTypes:           file_kv_store_proto_goTypes,
+		DependencyIndexes: file_kv_store_proto_depIdxs,
+		EnumInfos:         file_kv_store_proto_enumTypes,
+		MessageInfos:      file_kv_store_proto_msgTypes,
 	}.Build()
-	File_mvcc_kv_store_proto = out.File
-	file_mvcc_kv_store_proto_goTypes = nil
-	file_mvcc_kv_store_proto_depIdxs = nil
+	File_kv_store_proto = out.File
+	file_kv_store_proto_goTypes = nil
+	file_kv_store_proto_depIdxs = nil
 }

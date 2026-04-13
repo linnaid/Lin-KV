@@ -17,8 +17,8 @@ import (
 
 func NewLeaseManager(kv *KVStore) *LeaseManager {
 	return &LeaseManager{
-		kv: kv,
-		leases: make(map[int64]*Lease),
+		kv:          kv,
+		leases:      make(map[int64]*Lease),
 		nextLeaseID: 0,
 	}
 }
@@ -31,10 +31,10 @@ func (lm *LeaseManager) LeaseGrant(ttl int64) int64 {
 	lm.nextLeaseID++
 	leaseID := lm.nextLeaseID
 	lease := &Lease{
-		ID: leaseID,
-		TTL: ttl,
+		ID:       leaseID,
+		TTL:      ttl,
 		ExpireAt: time.Now().Add(time.Duration(ttl) * time.Second),
-		Keys: make(map[string]struct{}),
+		Keys:     make(map[string]struct{}),
 	}
 
 	lm.leases[leaseID] = lease
@@ -45,28 +45,53 @@ func (lm *LeaseManager) LeaseGrant(ttl int64) int64 {
 // key 绑定租约
 func (lm *LeaseManager) AttachKey(key string, leaseID int64) error {
 	lm.kv.mu.Lock()
-	lease, ok := lm.leases[leaseID]
-	lm.kv.mu.Unlock()
+	defer lm.kv.mu.Unlock()
 
-	if !ok {
-		return fmt.Errorf("Lease %d not found", leaseID)
+	lease, err := lm.lookupLeaseLocked(leaseID)
+	if err != nil {
+		return err
 	}
 
-	if time.Now().After(lease.ExpireAt) {
-		return fmt.Errorf("Lease %d already expired", leaseID)
+	lm.bindKeyToLeaseLocked(key, leaseID, lease)
+
+	return nil
+}
+
+func (lm *LeaseManager) bindKeyToLeaseLocked(key string, leaseID int64, lease *Lease) {
+	if oldLeaseID, exists := lm.kv.keyLease[key]; exists && oldLeaseID != leaseID {
+		if oldLease, ok := lm.leases[oldLeaseID]; ok {
+			delete(oldLease.Keys, key)
+		}
 	}
 
 	lease.Keys[key] = struct{}{}
+	lm.kv.keyLease[key] = leaseID
+}
 
-	if oldLease, exists := lm.kv.keyLease[key]; exists && oldLease != leaseID {
-		return fmt.Errorf("Key already attached to lease %d", oldLease)
+func (lm *LeaseManager) detachKeyLocked(key string) {
+	leaseID, exists := lm.kv.keyLease[key]
+	if !exists {
+		return
 	}
 
-	lm.kv.mu.Lock()
-	lm.kv.keyLease[key] = leaseID
-	lm.kv.mu.Unlock()
+	delete(lm.kv.keyLease, key)
+	if lease, ok := lm.leases[leaseID]; ok {
+		delete(lease.Keys, key)
+	}
+}
 
-	return nil
+// 在加锁状态下，查找一个 lease，并验证它仍可被绑定。
+func (lm *LeaseManager) lookupLeaseLocked(leaseID int64) (*Lease, error) {
+	lease, ok := lm.leases[leaseID]
+	if !ok {
+		return nil, fmt.Errorf("Lease %d not found", leaseID)
+	}
+
+	if time.Now().After(lease.ExpireAt) {
+		return nil, fmt.Errorf("Lease %d already expired", leaseID)
+	}
+
+	return lease, nil
 }
 
 // 延长 TTL
@@ -157,11 +182,11 @@ func (lm *LeaseManager) LeaseRevoke(leaseID int64) error {
 	// 	lm.kv.mu.Lock()
 	// 	delete(lm.kv.keyLease, key)
 	// 	lm.kv.mu.Unlock()
-		
+
 	// 	lm.kv.Delete(key)
 	// }
 	for _, ev := range events {
-		lm.kv.eventCh <-ev
+		lm.kv.eventCh <- ev
 	}
 
 	return nil
@@ -170,17 +195,17 @@ func (lm *LeaseManager) LeaseRevoke(leaseID int64) error {
 func (lm *LeaseManager) snapshot() ([]*mvcc.Lease, int64) {
 
 	leases := make([]*mvcc.Lease, 0, len(lm.leases))
-	for _, l :=  range lm.leases {
+	for _, l := range lm.leases {
 		keys := make([]string, 0, len(l.Keys))
 		for k := range l.Keys {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 		leases = append(leases, &mvcc.Lease{
-			Id: l.ID,
-			Ttl: l.TTL,
+			Id:               l.ID,
+			Ttl:              l.TTL,
 			ExpireAtUnixNano: l.ExpireAt.UnixNano(),
-			Keys: keys,
+			Keys:             keys,
 		})
 	}
 
@@ -205,10 +230,10 @@ func (lm *LeaseManager) restore(snapLeases []*mvcc.Lease) map[int64]*Lease {
 		expireAt := time.Unix(0, l.ExpireAtUnixNano)
 
 		leases[l.Id] = &Lease{
-			ID: l.Id,
-			TTL: l.Ttl,
+			ID:       l.Id,
+			TTL:      l.Ttl,
 			ExpireAt: expireAt,
-			Keys: keys,
+			Keys:     keys,
 		}
 	}
 

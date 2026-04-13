@@ -5,9 +5,8 @@ package mvcc
 import "etcd-KV/Tools"
 
 // 不可再Txn函数内调用API，避免造成死锁
-func (s *KVStore) Txn(txn Txn) (bool, []KeyValue) {
+func (s *KVStore) Txn(txn Txn) (bool, []KeyValue, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	compareResult := true
 	for _, t := range txn.Compares {
@@ -50,7 +49,19 @@ func (s *KVStore) Txn(txn Txn) (bool, []KeyValue) {
 		ops = txn.ElseOps
 	}
 
+	for _, op := range ops {
+		if op.Type != OpPut || op.LeaseID == 0 {
+			continue
+		}
+
+		if _, err := s.leaseMgr.lookupLeaseLocked(op.LeaseID); err != nil {
+			s.mu.Unlock()
+			return false, nil, err
+		}
+	}
+
 	result := make([]KeyValue, 0, len(ops))
+	events := make([]Event, 0, len(ops))
 	for _, op := range ops {
 
 		switch op.Type {
@@ -61,88 +72,42 @@ func (s *KVStore) Txn(txn Txn) (bool, []KeyValue) {
 			} else {
 				l := len(versions) - 1
 				latest := versions[l]
-				
+
+				value := append([]byte(nil), latest.Value...)
 				if latest.Deleted {
 					result = append(result, KeyValue{
-						Value: latest.Value,
-						Rev: latest.Rev,
+						Value: value,
+						Rev:   latest.Rev,
 					})
 				} else {
 					result = append(result, KeyValue{
-						Key: op.Key,
-						Value: latest.Value,
-						Rev: latest.Rev,
+						Key:   op.Key,
+						Value: value,
+						Rev:   latest.Rev,
 					})
 				}
-				
+
 			}
 		case OpPut:
-			s.currentRev++
-
-			rev := Revision{
-				Main: s.currentRev,
-				Sub: 0,
+			_, ev := s.putLocked(op.Key, op.Value)
+			if op.LeaseID != 0 {
+				s.leaseMgr.bindKeyToLeaseLocked(op.Key, op.LeaseID, s.leaseMgr.leases[op.LeaseID])
+			} else {
+				s.leaseMgr.detachKeyLocked(op.Key)
 			}
-
-			value := make([]byte, len(op.Value))
-			copy(value, op.Value)
-
-			s.data[op.Key] = append(s.data[op.Key], ValueRevision{
-				Rev: rev,
-				Value: value,
-				Deleted: false,
-			})
-
-			e_val := make([]byte, len(value))
-			copy(e_val, value)
-
-			ev :=Event{
-				Type: EventPut,
-				Key: op.Key,
-				Value: e_val,
-				Rev: rev,
-			}
-
-			s.events = append(s.events, ev)
-
-			select {
-			case s.eventCh<-ev:
-			default:
-			}
-			// s.mu.Unlock()
-			// s.notifyWatchers(ev)
-			// s.mu.Lock()
+			events = append(events, ev)
 
 		case OpDelete:
-			s.currentRev++
-
-			rev := Revision{
-				Main: s.currentRev,
-				Sub: 0,
-			}
-
-			s.data[op.Key] = append(s.data[op.Key], ValueRevision{
-				Rev: rev,
-				Deleted: true,
-			})
-
-			ev := Event{
-				Key: op.Key,
-				Type: EventDelete,
-				Rev: rev,
-				Value: nil,
-			}
-			s.events = append(s.events, ev)
-			
-			select {
-			case s.eventCh<-ev:
-			default:
-			}
-			// s.mu.Unlock()
-			// s.notifyWatchers(ev)
-			// s.mu.Lock()
+			_, ev := s.deleteLocked(op.Key)
+			events = append(events, ev)
 		}
 	}
 
-	return compareResult, result
+	s.mu.Unlock()
+
+	for _, ev := range events {
+		s.eventCh <- ev
+	}
+
+	return compareResult, result, nil
 }

@@ -23,7 +23,7 @@ func (s *Server) applyLoop() {
 			continue
 		}
 
-		data:= msg.Command
+		data := msg.Command
 
 		var env command.Command
 
@@ -59,7 +59,7 @@ func (s *Server) applyLoop() {
 			s.mu.Unlock()
 			continue
 		}
-		
+
 		s.mu.Unlock()
 
 		result := s.applyCommand(&env)
@@ -84,7 +84,7 @@ func (s *Server) applyLoop() {
 			s.LastResult[index] = result
 		}
 		s.mu.Unlock()
-		
+
 		if s.needSnapshot() {
 			snapshot := s.makeSnapshot()
 			s.raft.Snapshot(msg.CommandIndex, snapshot)
@@ -154,7 +154,12 @@ func (s *Server) applyKV(cmd *command.KVCommand) Result {
 
 	switch cmd.Type {
 	case command.CmdPut:
-		rev := s.store.Put(cmd.Key, cmd.Value, cmd.LeaseID)
+		rev, err := s.store.Put(cmd.Key, cmd.Value, cmd.LeaseID)
+		if err != nil {
+			return Result{
+				Err: err,
+			}
+		}
 		return Result{
 			Rev: &rev,
 		}
@@ -179,10 +184,15 @@ func (s *Server) applyTxn(cmd *command.TxnCommand) Result {
 		}
 	}
 
-	succeeded, kvs := s.store.Txn(toMVCCTxn(cmd))
+	succeeded, kvs, err := s.store.Txn(toMVCCTxn(cmd))
+	if err != nil {
+		return Result{
+			Err: err,
+		}
+	}
 	return Result{
 		TxnSucceeded: succeeded,
-		TxnResults: fromMVCCKeyValues(kvs),
+		TxnResults:   fromMVCCKeyValues(kvs),
 	}
 }
 
@@ -195,7 +205,7 @@ func (s *Server) applyLeaseGrant(cmd *command.LeaseGrantCommand) Result {
 
 	id := s.store.LeaseGrant(cmd.TTL)
 	return Result{
-		LeaseID: id,
+		LeaseID:  id,
 		LeaseTTL: cmd.TTL,
 	}
 }
@@ -224,7 +234,7 @@ func (s *Server) applyLeaseKeepAlive(cmd *command.LeaseKeepAliveCommand) Result 
 		}
 	}
 
-	ttl, err := s.store.LeaseKeepAlive(cmd.ID) 
+	ttl, err := s.store.LeaseKeepAlive(cmd.ID)
 	if err != nil {
 		return Result{
 			Err: err,
@@ -233,6 +243,6 @@ func (s *Server) applyLeaseKeepAlive(cmd *command.LeaseKeepAliveCommand) Result 
 
 	return Result{
 		LeaseTTL: ttl,
-		LeaseID: cmd.ID,
+		LeaseID:  cmd.ID,
 	}
 }

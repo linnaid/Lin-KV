@@ -44,44 +44,28 @@ func NewKVStoreWithOptions(opts StoreOptions) *KVStore {
 }
 
 // 覆盖写，不区分是否存在
-func (s *KVStore) Put(k string, v []byte, leaseID int64) Revision {
+func (s *KVStore) Put(k string, v []byte, leaseID int64) (Revision, error) {
 	s.mu.Lock()
 
-	s.currentRev++
-
-	rev := Revision{
-		Main: s.currentRev,
-		Sub:  0,
+	var lease *Lease
+	if leaseID != 0 {
+		var err error
+		lease, err = s.leaseMgr.lookupLeaseLocked(leaseID)
+		if err != nil {
+			s.mu.Unlock()
+			return Revision{}, err
+		}
 	}
 
-	// 防御性拷贝，避免外部修改影响内部状态
-	value := make([]byte, len(v))
-	copy(value, v)
+	rev, ev := s.putLocked(k, v)
 
-	s.data[k] = append(s.data[k], ValueRevision{
-		Rev:     rev,
-		Value:   value,
-		Deleted: false,
-	})
-
-	e_val := make([]byte, len(value))
-	copy(e_val, value)
-
-	ev := Event{
-		Type:  EventPut,
-		Key:   k,
-		Value: e_val,
-		Rev:   rev,
+	if lease != nil {
+		s.leaseMgr.bindKeyToLeaseLocked(k, leaseID, lease)
+	} else {
+		s.leaseMgr.detachKeyLocked(k)
 	}
-
-	s.events = append(s.events, ev)
 
 	s.mu.Unlock()
-
-	// attach lease
-	if leaseID != 0 {
-		s.leaseMgr.AttachKey(k, leaseID)
-	}
 
 	// 不能非阻塞发送，可能会丢事件
 	// select {
@@ -98,24 +82,40 @@ func (s *KVStore) Put(k string, v []byte, leaseID int64) Revision {
 	// 	Value: value,
 	// })
 
-	return rev
+	return rev, nil
 }
 
-// func (s *KVStore) Get(k string) ([]byte, bool) {
-// 	s.mu.Lock()
-// 	defer s.mu.Unlock()
+func (s *KVStore) putLocked(k string, v []byte) (Revision, Event) {
+	s.currentRev++
 
-// 	v, ok := s.kv[k]
+	rev := Revision{
+		Main: s.currentRev,
+		Sub:  0,
+	}
 
-// 	if !ok {
-// 		return nil, false
-// 	} else {
-// 		value := make([]byte, len(v))
-// 		copy(value, v)
+	value := make([]byte, len(v))
+	copy(value, v)
 
-// 		return value, true
-// 	}
-// }
+	s.data[k] = append(s.data[k], ValueRevision{
+		Rev:     rev,
+		Value:   value,
+		Deleted: false,
+	})
+
+	eVal := make([]byte, len(value))
+	copy(eVal, value)
+
+	ev := Event{
+		Type:  EventPut,
+		Key:   k,
+		Value: eVal,
+		Rev:   rev,
+	}
+
+	s.events = append(s.events, ev)
+
+	return rev, ev
+}
 
 func (s *KVStore) Get(k string, rev int64) ([]byte, int64, bool) {
 	s.mu.RLock()
@@ -213,7 +213,7 @@ func (s *KVStore) deleteLocked(k string) (Revision, Event) {
 	}
 
 	s.events = append(s.events, ev)
-	delete(s.keyLease, k)
+	s.leaseMgr.detachKeyLocked(k)
 
 	return rev, ev
 }
@@ -294,12 +294,12 @@ func (s *KVStore) Restore(snapshot []byte) {
 			continue
 		}
 		events = append(events, Event{
-			Type: EventType(ev.Type),
-			Key: ev.Key,
+			Type:  EventType(ev.Type),
+			Key:   ev.Key,
 			Value: append([]byte(nil), ev.Value...),
 			Rev: Revision{
 				Main: ev.Rev.Main,
-				Sub: ev.Rev.Sub,
+				Sub:  ev.Rev.Sub,
 			},
 		})
 	}
@@ -351,12 +351,12 @@ func (s *KVStore) Snapshot() []byte {
 	events := make([]*mvcc.Event, 0, len(s.events))
 	for _, ev := range s.events {
 		events = append(events, &mvcc.Event{
-			Type: mvcc.EventType(ev.Type),
-			Key: ev.Key,
+			Type:  mvcc.EventType(ev.Type),
+			Key:   ev.Key,
 			Value: append([]byte(nil), ev.Value...),
 			Rev: &mvcc.Revision{
 				Main: ev.Rev.Main,
-				Sub: ev.Rev.Sub,
+				Sub:  ev.Rev.Sub,
 			},
 		})
 	}
@@ -425,12 +425,12 @@ func (s *KVStore) Snapshot() []byte {
 	}
 
 	snap := &mvcc.Snapshot{
-		CurrentRev: currentRev,
-		CompactRev: compactRev,
-		Entries:    entries,
-		Events: 	events,
-		Leases: 	leases,
-		KeyLease: 	keylease,
+		CurrentRev:  currentRev,
+		CompactRev:  compactRev,
+		Entries:     entries,
+		Events:      events,
+		Leases:      leases,
+		KeyLease:    keylease,
 		NextLeaseId: nextLeaseID,
 	}
 
