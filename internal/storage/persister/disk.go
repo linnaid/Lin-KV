@@ -10,17 +10,17 @@ import (
 )
 
 const (
-	diskMagic = "RPS1"
-	diskFileName = "raft.persist"
+	diskMagic      = "RPS1"
+	diskFileName   = "raft.persist"
 	diskHeaderSize = 20 // 4字节maigc + 8字节raft长度 + 8字节snapshot长度
 )
 
 type DiskPersister struct {
-	mu 			sync.Mutex
-	dir 		string
-	path 		string
-	raftstate   []byte
-	snapshot    []byte
+	mu        sync.Mutex
+	dir       string
+	path      string
+	raftstate []byte
+	snapshot  []byte
 }
 
 func MakeDiskPersister(dir string) (*DiskPersister, error) {
@@ -29,7 +29,7 @@ func MakeDiskPersister(dir string) (*DiskPersister, error) {
 	}
 
 	ps := &DiskPersister{
-		dir: dir,
+		dir:  dir,
 		path: filepath.Join(dir, diskFileName),
 	}
 
@@ -53,7 +53,7 @@ func (ps *DiskPersister) loadFromDisk() error {
 
 	raftstate, snapshot, err := decodePersistFile(data)
 	if err != nil {
-		return  err
+		return err
 	}
 
 	ps.raftstate = raftstate
@@ -84,14 +84,21 @@ func decodePersistFile(data []byte) ([]byte, []byte, error) {
 	}
 
 	if len(data) < diskHeaderSize {
-		return nil, nil, fmt.Errorf("invalid persist magic: %q", string(data[0:4]))
+		return nil, nil, fmt.Errorf("insufficient data length: got %d bytes", len(data))
 	}
+	if string(data[0:4]) != diskMagic {
+		return nil, nil, fmt.Errorf("invalid magic header: %q", string(data[0:4]))
+	}
+
 	raftLen := binary.BigEndian.Uint64(data[4:12])
 	snapLen := binary.BigEndian.Uint64(data[12:20])
 
-	expect := diskHeaderSize + int(raftLen) + int(snapLen)
-	if len(data) != expect {
-		return nil, nil, fmt.Errorf("persist file size mismatch: got=%d want=%d", len(data), expect)
+	payloadLen := uint64(len(data) - diskHeaderSize)
+	if raftLen > payloadLen {
+		return nil, nil, fmt.Errorf("persist file size mismatch: raftLen=%d payload=%d", raftLen, payloadLen)
+	}
+	if snapLen != payloadLen-raftLen {
+		return nil, nil, fmt.Errorf("persist file size mismatch: snapLen=%d remaining=%d", snapLen, payloadLen-raftLen)
 	}
 
 	raftBegin := diskHeaderSize
@@ -119,12 +126,16 @@ func writeFileAtomic(dir string, path string, data []byte) error {
 
 	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
-		return err 
+		return err
 	}
 
 	// 强制把文件内容刷到磁盘，而不是留在页缓存里
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
+		return err
+	}
+
+	if err := tmp.Close(); err != nil {
 		return err
 	}
 
