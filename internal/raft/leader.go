@@ -6,10 +6,20 @@ import (
 	"time"
 )
 
+func (rf *Raft) initLeaderProgressLocked() {
+	lastLogIndex := rf.lastIncludeIndex + len(rf.log) - 1
+	rf.nextIndex = make([]int, len(rf.peers))
+	rf.matchIndex = make([]int, len(rf.peers))
+	for i := range rf.peers {
+		rf.nextIndex[i] = lastLogIndex + 1
+		rf.matchIndex[i] = rf.lastIncludeIndex
+	}
+}
+
 func (rf *Raft) logUpdate() {
 	// Tools.Info("logUpdate start")
 	// slog.Info("logUpdate start lalala", slog.Int("new_index", new_index))
-	for !rf.killed(){
+	for !rf.killed() {
 
 		select {
 		case <-time.After(rf.heartbeatInterval):
@@ -17,13 +27,13 @@ func (rf *Raft) logUpdate() {
 		}
 
 		rf.mu.Lock()
-		
+
 		new_index := len(rf.log) + rf.lastIncludeIndex - 1
 		// slog.Info("logUpdate start lalala", slog.Int("new_index", new_index))
 
 		if rf.killed() || rf.state != Leader {
 			rf.mu.Unlock()
-			event := RoleEvent{ IsLeader: false, Term: int64(rf.currentTerm)}
+			event := RoleEvent{IsLeader: false, Term: int64(rf.currentTerm)}
 			select {
 			case rf.roleCh <- event:
 			default:
@@ -50,118 +60,45 @@ func (rf *Raft) logUpdate() {
 
 			go func(server int) {
 				// for !rf.killed() {
-					rf.mu.Lock()
-					if rf.state != Leader {
-						event := RoleEvent{ IsLeader: false, Term: int64(rf.currentTerm)}
-						select {
-						case rf.roleCh <- event:
-						default:
-						}
-						rf.mu.Unlock()
-						return
+				rf.mu.Lock()
+				if rf.state != Leader {
+					event := RoleEvent{IsLeader: false, Term: int64(rf.currentTerm)}
+					select {
+					case rf.roleCh <- event:
+					default:
 					}
-
-					rf.updateCommiIndex()
-					Index := rf.nextIndex[server]
-					// slog.Warn("No access go")
-					// slog.Int("Index", Index)
-					// slog.Int("rf.lastIncludeIndex", rf.lastIncludeIndex)
-					// return
-
-					// slog.Info("AppendEntries",slog.Int("Index", Index), slog.Int("rf.lastIncludeIndex", rf.lastIncludeIndex))
-					if Index <= rf.lastIncludeIndex {
-						// slog.Warn("No access go")
-						args := InstallSnapshotArgs{
-							Term:             rf.currentTerm,
-							LeaderID:         rf.me,
-							LastIncludeIndex: rf.lastIncludeIndex,
-							LastIncludeTerm:  rf.lastIncludeTerm,
-							Data:             rf.snapshot,
-						}
-						reply := InstallSnapshotReply{}
-
-						currentTerm := rf.currentTerm
-						rf.mu.Unlock()
-						Tools.Info("Send InstallSnapshot")
-						ok := rf.sendInstallSnapshot(server, &args, &reply)
-
-						rf.mu.Lock()
-						// defer rf.mu.Unlock()
-
-						if !ok || rf.state != Leader || rf.currentTerm != currentTerm {
-								rf.mu.Unlock()
-								return
-							}
-
-						if ok {
-							if reply.Term > rf.currentTerm {
-								rf.currentTerm = reply.Term
-								rf.state = Follower
-								rf.votedFor = -1
-								rf.persist()
-								event := RoleEvent{ IsLeader: false, Term: int64(rf.currentTerm)}
-								select {
-								case rf.roleCh <- event:
-								default:
-								}
-								rf.mu.Unlock()
-								return
-							}
-
-							Index = rf.lastIncludeIndex
-							rf.nextIndex[server] = Index + 1
-							rf.matchIndex[server] = Index
-						}
-
-						rf.mu.Unlock()
-						return
-					} 
-
-					// slog.Warn("No access go")
-					args := AppendEntriesArgs{
-						Term:         rf.currentTerm,
-						LeaderId:     rf.me,
-						LeaderCommit: rf.commitIndex,
-					}
-
-					Index = rf.nextIndex[server]
-					args.PrevLogIndex = Index - 1
-					sliceIdx := args.PrevLogIndex - rf.lastIncludeIndex
-
-					if sliceIdx < 0 || sliceIdx >= len(rf.log) {
-						rf.nextIndex[server] = rf.lastIncludeIndex + 1
-						rf.mu.Unlock()
-						return
-					}
-
-					args.PrevLogTerm = rf.log[sliceIdx].Term
-
-					real_Index := Index - rf.lastIncludeIndex
-					lastLogIndex := rf.lastIncludeIndex + len(rf.log) - 1
-
-					if Index > lastLogIndex {
-						args.Entries = nil
-					} else {
-						args.Entries = rf.log[real_Index:]
-					}
-					// entries := rf.log[real_Index:]
-					// args.Entries = entries
-
-					reply := AppendEntriesReply{}
-					if rf.state != Leader || args.Term != rf.currentTerm {
-						rf.mu.Unlock()
-						return
-					}
-
 					rf.mu.Unlock()
+					return
+				}
 
-					// Tools.Info("Send Appendentries")
-					ok := rf.sendAppendEntries(server, &args, &reply)
+				rf.updateCommiIndex()
+				Index := rf.nextIndex[server]
+				// slog.Warn("No access go")
+				// slog.Int("Index", Index)
+				// slog.Int("rf.lastIncludeIndex", rf.lastIncludeIndex)
+				// return
+
+				// slog.Info("AppendEntries",slog.Int("Index", Index), slog.Int("rf.lastIncludeIndex", rf.lastIncludeIndex))
+				if Index <= rf.lastIncludeIndex {
+					// slog.Warn("No access go")
+					args := InstallSnapshotArgs{
+						Term:             rf.currentTerm,
+						LeaderID:         rf.me,
+						LastIncludeIndex: rf.lastIncludeIndex,
+						LastIncludeTerm:  rf.lastIncludeTerm,
+						Data:             rf.snapshot,
+					}
+					reply := InstallSnapshotReply{}
+
+					currentTerm := rf.currentTerm
+					rf.mu.Unlock()
+					Tools.Info("Send InstallSnapshot")
+					ok := rf.sendInstallSnapshot(server, &args, &reply)
 
 					rf.mu.Lock()
 					// defer rf.mu.Unlock()
 
-					if !ok || rf.state != Leader || args.Term != rf.currentTerm {
+					if !ok || rf.state != Leader || rf.currentTerm != currentTerm {
 						rf.mu.Unlock()
 						return
 					}
@@ -170,80 +107,153 @@ func (rf *Raft) logUpdate() {
 						if reply.Term > rf.currentTerm {
 							rf.currentTerm = reply.Term
 							rf.state = Follower
+							rf.votedFor = -1
 							rf.persist()
-							event := RoleEvent{ IsLeader: false, Term: int64(rf.currentTerm)}
+							event := RoleEvent{IsLeader: false, Term: int64(rf.currentTerm)}
 							select {
 							case rf.roleCh <- event:
 							default:
 							}
-
 							rf.mu.Unlock()
 							return
 						}
 
-						if reply.Success {
-							// if len(entries) > 0 {
-								rf.matchIndex[server] = args.PrevLogIndex + len(args.Entries)
-								rf.nextIndex[server] = rf.matchIndex[server] + 1
-							// } else {
-							// 	if rf.matchIndex[server] < args.PrevLogIndex {
-							// 		rf.matchIndex[server] = args.PrevLogIndex
-							// 		rf.nextIndex[server] = rf.matchIndex[server] + 1
-							// 	}
-							// }
-							///////////////////////////////////////////
+						Index = rf.lastIncludeIndex
+						rf.nextIndex[server] = Index + 1
+						rf.matchIndex[server] = Index
+					}
 
-							// ReadIndex quroum
-							if rf.pendingReadCh != nil {
-								rf.pendingReadCount++
+					rf.mu.Unlock()
+					return
+				}
 
-								if rf.pendingReadCount > len(rf.peers)/2 {
-									select {
-									case rf.pendingReadCh<- struct{}{}:
-									default:
-									}
+				// slog.Warn("No access go")
+				args := AppendEntriesArgs{
+					Term:         rf.currentTerm,
+					LeaderId:     rf.me,
+					LeaderCommit: rf.commitIndex,
+				}
+
+				Index = rf.nextIndex[server]
+				args.PrevLogIndex = Index - 1
+				sliceIdx := args.PrevLogIndex - rf.lastIncludeIndex
+
+				if sliceIdx < 0 || sliceIdx >= len(rf.log) {
+					rf.nextIndex[server] = rf.lastIncludeIndex + 1
+					rf.mu.Unlock()
+					return
+				}
+
+				args.PrevLogTerm = rf.log[sliceIdx].Term
+
+				real_Index := Index - rf.lastIncludeIndex
+				lastLogIndex := rf.lastIncludeIndex + len(rf.log) - 1
+
+				if Index > lastLogIndex {
+					args.Entries = nil
+				} else {
+					args.Entries = rf.log[real_Index:]
+				}
+				// entries := rf.log[real_Index:]
+				// args.Entries = entries
+
+				reply := AppendEntriesReply{}
+				if rf.state != Leader || args.Term != rf.currentTerm {
+					rf.mu.Unlock()
+					return
+				}
+
+				rf.mu.Unlock()
+
+				// Tools.Info("Send Appendentries")
+				ok := rf.sendAppendEntries(server, &args, &reply)
+
+				rf.mu.Lock()
+				// defer rf.mu.Unlock()
+
+				if !ok || rf.state != Leader || args.Term != rf.currentTerm {
+					rf.mu.Unlock()
+					return
+				}
+
+				if ok {
+					if reply.Term > rf.currentTerm {
+						rf.currentTerm = reply.Term
+						rf.state = Follower
+						rf.persist()
+						event := RoleEvent{IsLeader: false, Term: int64(rf.currentTerm)}
+						select {
+						case rf.roleCh <- event:
+						default:
+						}
+
+						rf.mu.Unlock()
+						return
+					}
+
+					if reply.Success {
+						// if len(entries) > 0 {
+						rf.matchIndex[server] = args.PrevLogIndex + len(args.Entries)
+						rf.nextIndex[server] = rf.matchIndex[server] + 1
+						// } else {
+						// 	if rf.matchIndex[server] < args.PrevLogIndex {
+						// 		rf.matchIndex[server] = args.PrevLogIndex
+						// 		rf.nextIndex[server] = rf.matchIndex[server] + 1
+						// 	}
+						// }
+						///////////////////////////////////////////
+
+						// ReadIndex quroum
+						if rf.pendingReadCh != nil {
+							rf.pendingReadCount++
+
+							if rf.pendingReadCount > len(rf.peers)/2 {
+								select {
+								case rf.pendingReadCh <- struct{}{}:
+								default:
 								}
 							}
-							
+						}
+
+					} else {
+						if reply.ConflictTerm == -1 {
+							rf.nextIndex[server] = reply.ConflictIndex
+							// return
 						} else {
-							if reply.ConflictTerm == -1 {
-								rf.nextIndex[server] = reply.ConflictIndex
-								// return
-							} else {
-								// lastIndexOfTerm := -1
-								// for i := len(rf.log) - 1; i >= 0; i-- {
-								// 	if rf.log[i].Term == reply.ConflictTerm {
-								// 		lastIndexOfTerm = i + rf.lastIncludeIndex
-								// 		break
-								// 	}
-								// }
-								// if lastIndexOfTerm != -1 {
-								// 	rf.nextIndex[server] = lastIndexOfTerm + 1
-								// } else {
-								// 	rf.nextIndex[server] = reply.ConflictIndex
-								// }
-							}
-
-							if reply.ConflictIndex != -1 {
-								rf.nextIndex[server] = reply.ConflictIndex
-							}
-							// time.Sleep(10 * time.Millisecond)
-
+							// lastIndexOfTerm := -1
+							// for i := len(rf.log) - 1; i >= 0; i-- {
+							// 	if rf.log[i].Term == reply.ConflictTerm {
+							// 		lastIndexOfTerm = i + rf.lastIncludeIndex
+							// 		break
+							// 	}
+							// }
+							// if lastIndexOfTerm != -1 {
+							// 	rf.nextIndex[server] = lastIndexOfTerm + 1
+							// } else {
+							// 	rf.nextIndex[server] = reply.ConflictIndex
+							// }
 						}
 
-						if rf.matchIndex[server] > rf.nextIndex[server] {
-							rf.matchIndex[server] = rf.nextIndex[server] - 1
+						if reply.ConflictIndex != -1 {
+							rf.nextIndex[server] = reply.ConflictIndex
 						}
-						// slog.Warn("No access go")
-					} 
-					rf.mu.Unlock()
+						// time.Sleep(10 * time.Millisecond)
+
+					}
+
+					if rf.matchIndex[server] > rf.nextIndex[server] {
+						rf.matchIndex[server] = rf.nextIndex[server] - 1
+					}
+					// slog.Warn("No access go")
+				}
+				rf.mu.Unlock()
 				// }
 			}(i)
 		}
-		
+
 		// time.Sleep(rf.heartbeatInterval)
 	}
-	
+
 }
 
 func (rf *Raft) updateCommiIndex() {

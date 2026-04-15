@@ -22,11 +22,17 @@ func (rf *Raft) ReadIndex() (int, bool) {
 	// 初始化一次
 	rf.pendingReadCh = make(chan struct{}, 1)
 	rf.pendingReadCount = 1 // leader 自己算一个
+	if rf.pendingReadCount > len(rf.peers)/2 {
+		select {
+		case rf.pendingReadCh <- struct{}{}:
+		default:
+		}
+	}
 
 	rf.mu.Unlock()
 
 	select {
-	case rf.readTriggerCh<- struct{}{}:
+	case rf.readTriggerCh <- struct{}{}:
 	default:
 	}
 
@@ -38,14 +44,14 @@ func (rf *Raft) ReadIndex() (int, bool) {
 		defer rf.mu.Unlock()
 
 		if rf.state != Leader || rf.currentTerm != term {
-			return  0, false
+			return 0, false
 		}
 
 		rf.pendingReadCh = nil
 		rf.pendingReadCount = 0
-		
+
 		return index, true
-		
+
 	case <-time.After(100 * time.Millisecond):
 		rf.mu.Lock()
 		rf.pendingReadCh = nil

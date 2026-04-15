@@ -22,7 +22,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.state = Follower
 		event := RoleEvent{
 			IsLeader: false,
-			Term: int64(rf.currentTerm),
+			Term:     int64(rf.currentTerm),
 		}
 		select {
 		case rf.roleCh <- event:
@@ -92,12 +92,7 @@ func (rf *Raft) startElection() {
 		rf.mu.Lock()
 		rf.state = Leader
 		// Tools.Info("Leader was done")
-		rf.nextIndex = make([]int, len(rf.peers))
-		rf.matchIndex = make([]int, len(rf.peers))
-		for j := range rf.peers {
-			rf.nextIndex[j] = lastLogIndex + 1
-			rf.matchIndex[j] = rf.lastIncludeIndex
-		}
+		rf.initLeaderProgressLocked()
 		go rf.logUpdate()
 		rf.mu.Unlock()
 		return
@@ -138,19 +133,13 @@ func (rf *Raft) startElection() {
 						if reply.Term == term && rf.state == Candidate {
 							rf.state = Leader
 							Tools.Info("Leader Success")
-							event := RoleEvent{ IsLeader: true, Term: int64(rf.currentTerm)}
+							event := RoleEvent{IsLeader: true, Term: int64(rf.currentTerm)}
 							select {
 							case rf.roleCh <- event:
 							default:
 							}
 							// go rf.sendHeartbeats()	//////////////////////////////
-							rf.nextIndex = make([]int, len(rf.peers))
-							rf.matchIndex = make([]int, len(rf.peers))
-
-							for j := range rf.peers {
-								rf.nextIndex[j] = lastLogIndex + 1
-								rf.matchIndex[j] = rf.lastIncludeIndex
-							}
+							rf.initLeaderProgressLocked()
 							// rf.mu.Unlock()
 							go rf.logUpdate()
 							// rf.mu.Lock()
