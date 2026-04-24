@@ -1,8 +1,10 @@
+// 对外提供按槽位保存和加载 raft state 的接口
 package wal
 
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -13,7 +15,7 @@ type WAL struct {
 	mu sync.Mutex
 	// file *os.File
 	dir string
-	path string
+	// path string
 }
 
 type Record struct {
@@ -28,22 +30,25 @@ func OpenWAL (dir string) (*WAL, error) {
 
 	return &WAL{
 		dir: dir,
-		path: segmentPath(dir),
+		// path: segmentPath(dir),
 	}, nil
 }
 
-func (w *WAL) Save(state []byte) error {
+func (w *WAL) SaveSlot(slot int, state []byte) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	return writeSegmentAtomic(w.dir, w.path, clone(state))
+	path := filepath.Join(w.dir, slotFileName(slot))
+
+	return writeSegmentAtomic(w.dir, path, clone(state))
 }
 
-func (w *WAL) Load() ([]byte, error) {
+func (w *WAL) LoadSlot(slot int) ([]byte, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	data, err := os.ReadFile(w.path)
+	path := filepath.Join(w.dir, slotFileName(slot))
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil

@@ -14,7 +14,7 @@ import (
 type Store struct {
 	mu sync.Mutex
 	dir string
-	path string
+	// path string
 }
 
 func OpenStore(dir string) (*Store, error) {
@@ -24,7 +24,7 @@ func OpenStore(dir string) (*Store, error) {
 
 	return &Store{
 		dir: dir,
-		path: filepath.Join(dir, snapshotFileName),
+		// path: filepath.Join(dir, snapshotFileName),
 	}, nil
 }
 
@@ -69,12 +69,13 @@ func decodeFile(data []byte) ([]byte, error) {
 	return clone(data[snapshotHeaderSize:]), nil
 }
 
-func (s *Store) Save(snapshot []byte) error {
+func (s *Store) SaveSlot(slot int, snapshot []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	path := filepath.Join(s.dir, slotFileName(slot))
 	data := encodeFile(snapshot)
-	tmp, err := os.CreateTemp(s.dir, snapshotTempPattern)
+	tmp, err := os.CreateTemp(s.dir, ".snapshot-*.tmp")
 	if err != nil {
 		return err
 	}
@@ -96,18 +97,19 @@ func (s *Store) Save(snapshot []byte) error {
 		return err
 	}
 
-	if err := os.Rename(tmpName, s.path); err != nil {
+	if err := os.Rename(tmpName, path); err != nil {
 		return err
 	}
 
 	return syncDir(s.dir)
 }
 
-func (s *Store) Load() ([]byte, error) {
+func (s *Store) LoadSlot(slot int) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, err := os.ReadFile(s.path)
+	path := filepath.Join(s.dir, slotFileName(slot))
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
