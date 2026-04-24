@@ -5,12 +5,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"etcd-KV/internal/storage/snapshot"
-	"etcd-KV/internal/storage/wal"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+
+	snapshotstore "etcd-KV/internal/storage/snapshot"
+	"etcd-KV/internal/storage/wal"
 )
 
 const (
@@ -19,13 +20,17 @@ const (
 	diskHeaderSize = 20 // 4字节maigc + 8字节raft长度 + 8字节snapshot长度
 )
 
+// 磁盘持久化器
 type DiskPersister struct {
 	mu        sync.Mutex
 	dir       string
-	path      string
+	legacypath      string // 指向旧版 raft.persist 文件路径
 
 	walStore *wal.WAL
-	snapshotStore *snapshot.Store
+	snapshotStore *snapshotstore.Store
+
+	raftSlot int
+	snapshotSlot int
 
 	raftstate []byte
 	snapshot  []byte
@@ -41,16 +46,18 @@ func MakeDiskPersister(dir string) (*DiskPersister, error) {
 		return nil, err
 	}
 
-	snapshotStore, err := snapshot.OpenStore(filepath.Join(dir, "snapshot"))
+	snapshotStore, err := snapshotstore.OpenStore(filepath.Join(dir, "snapshot"))
 	if err != nil {
 		return nil, err
 	}
 
 	ps := &DiskPersister{
 		dir:  dir,
-		path: filepath.Join(dir, diskFileName),
+		legacypath: filepath.Join(dir, diskFileName),
 		walStore: walStore,
 		snapshotStore: snapshotStore,
+		raftSlot: 0,
+		snapshotSlot: noSnapshotSlot,
 	}
 
 	if err := ps.loadFromDisk(); err != nil {
@@ -62,43 +69,50 @@ func MakeDiskPersister(dir string) (*DiskPersister, error) {
 
 // 读取旧状态
 func (ps *DiskPersister) loadFromDisk() error {
-	raftstate, err := ps.walStore.Load()
+	m, ok, err := loadManifest(ps.dir)
 	if err != nil {
 		return err
 	}
 
-	snapshot, err := ps.snapshotStore.Load()
+	if ok {
+		return ps.loadSlots(m)
+	}
+
+	// manifest 不存在，尝试迁移旧版raft.persist
+	return ps.migrateLegacyFile()
+}
+
+func (ps *DiskPersister) loadSlots(m slotManifest) error {
+	raftstate, err := ps.walStore.LoadSlot(m.RaftSlot)
 	if err != nil {
 		return err
 	}
 
-	if len(raftstate) == 0 && len(snapshot) == 0 {
-		if err := ps.migrateLegacyFile(); err != nil {
-			return err
-		}
-
-		snapshot, err = ps.snapshotStore.Load()
-		if err != nil {
-			return err
-		}
-
-		raftstate, err = ps.walStore.Load()
+	var snapshot []byte
+	if m.SnapshotSlot != noSnapshotSlot {
+		snapshot, err = ps.snapshotStore.LoadSlot(m.SnapshotSlot)
 		if err != nil {
 			return err
 		}
 	}
 
-	ps.raftstate = clone(raftstate)
+	ps.raftSlot = m.RaftSlot
+	ps.snapshotSlot = m.SnapshotSlot
 	ps.snapshot = clone(snapshot)
+	ps.raftstate = clone(raftstate)
 
 	return nil
 }
 
 // 把旧版单文件格式搬到 wal/ + snapshot/
 func (ps *DiskPersister) migrateLegacyFile() error {
-	data, err := os.ReadFile(ps.path)
+	data, err := os.ReadFile(ps.legacypath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
+			ps.snapshotSlot = noSnapshotSlot
+			ps.raftSlot = 0
+			ps.raftstate = nil
+			ps.snapshot = nil
 			return nil
 		}
 		return err
@@ -109,14 +123,39 @@ func (ps *DiskPersister) migrateLegacyFile() error {
 		return err
 	}
 
-	if err := ps.snapshotStore.Save(snapshot); err != nil {
-		return err
+	raftSlot := 0
+	snapshotSlot := noSnapshotSlot
+	if len(snapshot) > 0 {
+		snapshotSlot = 0
+		if err := ps.snapshotStore.SaveSlot(snapshotSlot, snapshot); err != nil {
+			return err
+		}
 	}
-	if err := ps.walStore.Save(raftstate); err != nil {
+	if err := ps.walStore.SaveSlot(raftSlot, raftstate); err != nil {
 		return err
 	}
 
+	if err := saveManifest(ps.dir, slotManifest{
+		RaftSlot: raftSlot,
+		SnapshotSlot: snapshotSlot,
+	}); err != nil {
+		return err
+	}
+
+	ps.raftSlot = raftSlot
+	ps.raftstate = clone(raftstate)
+	ps.snapshotSlot = snapshotSlot
+	ps.snapshot = clone(snapshot)
+
 	return nil
+}
+
+// 双槽位切换
+func nextSlot(current int) int {
+	if current == 0 {
+		return 1
+	}
+	return 0
 }
 
 // raft 层主链路里真正调用的持久化入口
@@ -127,42 +166,37 @@ func (ps *DiskPersister) Save(raftstate []byte, snapshot []byte) {
 	newRaft := clone(raftstate)
 	newSnap := clone(snapshot)
 
-	if !bytes.Equal(newSnap, ps.snapshot) {
-		if err := ps.snapshotStore.Save(newSnap); err != nil {
+	newRaftSlot := nextSlot(ps.raftSlot)
+	newSnapshotSlot := ps.snapshotSlot
+
+	if len(newSnap) == 0 {
+		newSnapshotSlot = noSnapshotSlot
+	}
+
+	if len(newSnap) > 0 && (ps.snapshotSlot == noSnapshotSlot || !bytes.Equal(newSnap, ps.snapshot)) {
+		newSnapshotSlot = nextSlot(ps.snapshotSlot)
+
+		if err := ps.snapshotStore.SaveSlot(newSnapshotSlot, newSnap); err != nil {
 			panic(err)
 		}
 	}
-	
-	// data := encodePersistFile(newRaft, newSnap)
 
-	// if err := writeFileAtomic(ps.dir, ps.path, data); err != nil {
-	// 	panic(err)
-	// }
-
-	if err := ps.walStore.Save(newRaft); err != nil {
+	if err := ps.walStore.SaveSlot(newRaftSlot, newRaft); err != nil {
 		panic(err)
 	}
 
+	if err := saveManifest(ps.dir, slotManifest{
+		RaftSlot: newRaftSlot,
+		SnapshotSlot: newSnapshotSlot,
+	}); err != nil {
+		panic(err)
+	}
+
+	ps.raftSlot = newRaftSlot
 	ps.raftstate = newRaft
+	ps.snapshotSlot = newSnapshotSlot
 	ps.snapshot = newSnap
 }
-
-// func encodePersistFile(raftstate []byte, snapshot []byte) []byte {
-// 	raftCopy := clone(raftstate)
-// 	snapCopy := clone(snapshot)
-
-// 	total := diskHeaderSize + len(raftCopy) + len(snapCopy)
-// 	buf := make([]byte, total)
-
-// 	copy(buf[0:4], []byte(diskMagic))
-// 	binary.BigEndian.PutUint64(buf[4:12], uint64(len(raftCopy)))
-// 	binary.BigEndian.PutUint64(buf[12:20], uint64(len(snapCopy)))
-
-// 	copy(buf[20:20+len(raftCopy)], raftCopy)
-// 	copy(buf[20+len(raftCopy):], snapCopy)
-
-// 	return buf
-// }
 
 func decodePersistFile(data []byte) ([]byte, []byte, error) {
 	if len(data) == 0 {
@@ -198,52 +232,6 @@ func decodePersistFile(data []byte) ([]byte, []byte, error) {
 
 	return raftstate, snapshot, nil
 }
-
-// func writeFileAtomic(dir string, path string, data []byte) error {
-// 	tmp, err := os.CreateTemp(dir, ".raft.persist-*.tmp")
-
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	tmpName := tmp.Name()
-
-// 	defer func() { _ = os.Remove(tmpName) }()
-
-// 	if _, err := tmp.Write(data); err != nil {
-// 		_ = tmp.Close()
-// 		return err
-// 	}
-
-// 	// 强制把文件内容刷到磁盘，而不是留在页缓存里
-// 	if err := tmp.Sync(); err != nil {
-// 		_ = tmp.Close()
-// 		return err
-// 	}
-
-// 	if err := tmp.Close(); err != nil {
-// 		return err
-// 	}
-
-// 	if err := os.Rename(tmpName, path); err != nil {
-// 		return err
-// 	}
-
-// 	return syncDir(dir)
-// }
-
-// // 把目录项刷盘
-// func syncDir(dir string) error {
-// 	f, err := os.Open(dir)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	defer f.Close()
-
-// 	return f.Sync()
-// }
-
 
 func (ps *DiskPersister) ReadRaftState() []byte {
 	ps.mu.Lock()
