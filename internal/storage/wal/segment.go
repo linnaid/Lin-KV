@@ -1,16 +1,11 @@
-// 负责但个 WAL 文件的编码、解码和原子写
+// 负责单个 WAL 文件的编码、解码和原子写
 package wal
 
 import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"path/filepath"
 )
-
-func segmentPath(dir string) string {
-	return filepath.Join(dir, currentSegmentName)
-}
 
 // clone 用来防止调用方和持久化层共享底层切片
 func clone(data []byte) []byte {
@@ -20,10 +15,10 @@ func clone(data []byte) []byte {
 	return append([]byte(nil), data...)
 }
 
-// encodeSegment 把 payload编码成带 header 的文件内容
+// encodeSegment 把 payload 编码成带 header 的文件内容
 func encodeSegment(payload []byte) []byte {
 	body := clone(payload)
-	buf := make([]byte, walHeaderSize + len(body))
+	buf := make([]byte, walHeaderSize+len(body))
 	copy(buf[0:4], []byte(walMagic))
 	binary.BigEndian.PutUint64(buf[4:12], uint64(len(body)))
 	copy(buf[walHeaderSize:], body)
@@ -55,7 +50,7 @@ func decodeSegment(data []byte) ([]byte, error) {
 }
 
 // 用原子 rename 方式更新 WAL 文件
-func writeSegmentAtomic(dir string , path string, payload []byte) error {
+func writeSegmentAtomic(dir string, path string, payload []byte) error {
 	data := encodeSegment(payload)
 	tmp, err := os.CreateTemp(dir, walTempPattern)
 	if err != nil {

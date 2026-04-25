@@ -17,19 +17,19 @@ import (
 const (
 	diskMagic      = "RPS1"
 	diskFileName   = "raft.persist"
-	diskHeaderSize = 20 // 4字节maigc + 8字节raft长度 + 8字节snapshot长度
+	diskHeaderSize = 20 // 4字节 magic + 8字节 raft 长度 + 8字节 snapshot 长度
 )
 
 // 磁盘持久化器
 type DiskPersister struct {
-	mu        sync.Mutex
-	dir       string
-	legacypath      string // 指向旧版 raft.persist 文件路径
+	mu         sync.Mutex
+	dir        string
+	legacypath string // 指向旧版 raft.persist 文件路径
 
-	walStore *wal.WAL
+	walStore      *wal.WAL
 	snapshotStore *snapshotstore.Store
 
-	raftSlot int
+	raftSlot     int
 	snapshotSlot int
 
 	raftstate []byte
@@ -52,12 +52,12 @@ func MakeDiskPersister(dir string) (*DiskPersister, error) {
 	}
 
 	ps := &DiskPersister{
-		dir:  dir,
-		legacypath: filepath.Join(dir, diskFileName),
-		walStore: walStore,
+		dir:           dir,
+		legacypath:    filepath.Join(dir, diskFileName),
+		walStore:      walStore,
 		snapshotStore: snapshotStore,
-		raftSlot: 0,
-		snapshotSlot: noSnapshotSlot,
+		raftSlot:      0,
+		snapshotSlot:  noSnapshotSlot,
 	}
 
 	if err := ps.loadFromDisk(); err != nil {
@@ -136,7 +136,7 @@ func (ps *DiskPersister) migrateLegacyFile() error {
 	}
 
 	if err := saveManifest(ps.dir, slotManifest{
-		RaftSlot: raftSlot,
+		RaftSlot:     raftSlot,
 		SnapshotSlot: snapshotSlot,
 	}); err != nil {
 		return err
@@ -186,7 +186,7 @@ func (ps *DiskPersister) Save(raftstate []byte, snapshot []byte) {
 	}
 
 	if err := saveManifest(ps.dir, slotManifest{
-		RaftSlot: newRaftSlot,
+		RaftSlot:     newRaftSlot,
 		SnapshotSlot: newSnapshotSlot,
 	}); err != nil {
 		panic(err)
