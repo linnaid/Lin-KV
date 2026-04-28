@@ -24,36 +24,36 @@ const applyBufferSize = 1000
 
 // 描述集群中一个 raft peer 的静态地址信息
 type PeerConfig struct {
-	ID int `json:"id"` // ID 当前等价于 raft.Make 的 peers 下标，从 0 递增
-	PeerAddr string `json:"peer_addr"` // 节点间 Raft RPC 使用的监听地址
+	ID         int    `json:"id"`          // ID 当前等价于 raft.Make 的 peers 下标，从 0 递增
+	PeerAddr   string `json:"peer_addr"`   // 节点间 Raft RPC 使用的监听地址
 	ClientAddr string `json:"client_addr"` // 客户端访问 KV API 的监听地址
 }
 
 // 描述“当前进程要启动的这一个节点”
 type NodeConfig struct {
-	ID int `json:"id"`
-	PeerAddr string `json:"peer_addr"`
-	ClientAddr string `json:"client_addr"`
-	DataDir string `json:"data_dir"` // 当前节点持久化 raft/snapshot 数据的目录
-	Peers []PeerConfig `json:"peers"` // 完整集群成员列表，所有节点必须一致
+	ID         int          `json:"id"`
+	PeerAddr   string       `json:"peer_addr"`
+	ClientAddr string       `json:"client_addr"`
+	DataDir    string       `json:"data_dir"` // 当前节点持久化 raft/snapshot 数据的目录
+	Peers      []PeerConfig `json:"peers"`    // 完整集群成员列表，所有节点必须一致
 }
 
 // 表示一个已经启动或正在关闭的单节点进程
 type Node struct {
-	cfg NodeConfig
+	cfg      NodeConfig
 	raftNode *raft.Raft
-	kvCore *kvserver.Server
+	kvCore   *kvserver.Server
 
-	peerHandler *grpctransport.RaftServer
+	peerHandler  *grpctransport.RaftServer
 	peerListener net.Listener
-	peerServer *gogrpc.Server
-	
+	peerServer   *gogrpc.Server
+
 	clientListener net.Listener
-	clientServer *gogrpc.Server
-	peerConns []*gogrpc.ClientConn
+	clientServer   *gogrpc.Server
+	peerConns      []*gogrpc.ClientConn
 
 	closeOnce sync.Once
-	closeErr error
+	closeErr  error
 }
 
 // 从配置文件加载 NodeConfig
@@ -65,7 +65,7 @@ func LoadNodeConfig(path string) (NodeConfig, error) {
 
 	var cfg NodeConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return  NodeConfig{}, fmt.Errorf("decode config %q: %w", path, err)
+		return NodeConfig{}, fmt.Errorf("decode config %q: %w", path, err)
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -204,7 +204,7 @@ func (n *Node) Close() error {
 			n.clientServer.Stop()
 		}
 
-		if n.peerServer !=nil {
+		if n.peerServer != nil {
 			n.peerServer.Stop()
 		}
 
