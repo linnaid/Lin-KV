@@ -1,7 +1,7 @@
+#!/usr/bin/env bash
+
 # 本地构建并启动 3 个独立 kv-server 进程
 # 验证"一进程一节点"的集群部署方式
-
-#!/usr/bin/env bash
 
 set -euo pipefail
 
@@ -18,7 +18,7 @@ go build -o "${BIN}" ./cmd/kv-server
 
 pids=()
 
-# 负责脚本推出时停止所有节点
+# 负责脚本退出时停止所有节点
 cleanup() {
     for pid in "${pids[@]}"; do
         if kill -0 "${pid}" 2>/dev/null; then

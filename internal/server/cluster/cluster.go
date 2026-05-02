@@ -93,8 +93,12 @@ func (c NodeConfig) Validate() error {
 		return fmt.Errorf("data_dir is required")
 	}
 
+	if len(c.Peers) == 0 {
+		return fmt.Errorf("peers is required")
+	}
+
 	if c.ID >= len(c.Peers) {
-		return fmt.Errorf("node is %d is outside peers length %d", c.ID, len(c.Peers))
+		return fmt.Errorf("node id %d is outside peers length %d", c.ID, len(c.Peers))
 	}
 
 	for i, peer := range c.Peers {
@@ -149,6 +153,7 @@ func StartNode(cfg NodeConfig) (*Node, error) {
 	for i, peerCfg := range cfg.Peers {
 		conn, err := gogrpc.Dial(peerCfg.PeerAddr, gogrpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
+			_ = node.Close()
 			return nil, fmt.Errorf("dial peer %d at %q: %w", peerCfg.ID, peerCfg.PeerAddr, err)
 		}
 
@@ -173,7 +178,7 @@ func StartNode(cfg NodeConfig) (*Node, error) {
 	if err != nil {
 		_ = node.Close()
 
-		return nil, fmt.Errorf("listen client%q: %w", cfg.ClientAddr, err)
+		return nil, fmt.Errorf("listen client %q: %w", cfg.ClientAddr, err)
 	}
 
 	node.clientListener = clientListener
