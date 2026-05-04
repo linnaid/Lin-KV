@@ -1,234 +1,60 @@
-package main
+package main // main 包是 kv-server 可执行程序入口。
 
-import (
-	"context"
-	"fmt"
-	"net"
-	"time"
+import ( // 引入命令行解析、进程信号和单节点启动依赖。
+	"flag"      // 解析 -config 等命令行参数。
+	"fmt"       // 输出启动信息和错误信息。
+	"os"        // 访问 stderr/stdout 并控制进程退出码。
+	"os/signal" // 接收 Ctrl-C 和系统终止信号。
+	"syscall"   // 提供 SIGTERM 常量。
 
-	"etcd-KV/Tools"
-	"etcd-KV/internal/client"
-	"etcd-KV/internal/pb/raftpb"
-	"etcd-KV/internal/raft"
-	"etcd-KV/internal/server/kvserver"
-	"etcd-KV/internal/storage/mvcc"
-	"etcd-KV/internal/storage/persister"
-	grpctransport "etcd-KV/internal/transport/grpc"
-	kvpb "etcd-KV/internal/api/kv/pb"
+	"etcd-KV/internal/server/cluster" // 加载节点配置并启动单节点服务。
+) // import 结束。
 
-	gogrpc "google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-)
-
+// main 是进程入口，负责把错误转换成清晰的 stderr 输出和退出码。
 func main() {
+	if err := run(); err != nil { // 执行真正的启动流程，并统一处理返回错误。
+		fmt.Fprintf(os.Stderr, "kv-server error: %v\n", err) // 把启动失败原因输出到 stderr。
+		os.Exit(1)                                           // 用非 0 退出码告诉脚本本进程启动失败。
+	} // 错误处理结束。
+} // main 结束。
 
-	peerAddrs := []string{
-		"127.0.0.1:8001",
-		"127.0.0.1:8002",
-		"127.0.0.1:8003",
-	}
+// run 负责解析配置、启动当前节点，并阻塞等待退出信号。
+func run() error {
+	configPath := flag.String("config", "", "path to node config json") // 定义 -config 参数，指向当前节点 JSON 配置文件。
+	flag.Parse()                                                        // 解析命令行参数。
 
-	clientAddrs := []string{
-		"127.0.0.1:9001",
-		"127.0.0.1:9002",
-		"127.0.0.1:9003",
-	}
+	if *configPath == "" { // 配置文件路径是启动节点的必需参数。
+		return fmt.Errorf("missing required -config") // 返回明确的参数错误，避免继续用空配置启动。
+	} // -config 校验结束。
 
-	n := len(peerAddrs)
+	cfg, err := cluster.LoadNodeConfig(*configPath) // 从 JSON 文件加载并校验当前节点配置。
+	if err != nil {                                 // 判断配置加载或校验是否失败。
+		return fmt.Errorf("load config: %w", err) // 包装配置错误，保留原始错误链。
+	} // 配置加载错误处理结束。
 
-	// 初始化数组
-	peers := make([][]raft.Peer, n)
-	rafts := make([]*raft.Raft, n)
-	applyChs := make([]chan raft.ApplyMsg, n)
-	stores := make([]*mvcc.KVStore, n)
-	KVservers := make([]*kvserver.Server, n)
+	node, err := cluster.StartNode(cfg) // 根据配置启动当前这一个节点。
+	if err != nil {                     // 判断节点启动是否失败。
+		return fmt.Errorf("start node: %w", err) // 包装启动错误，方便定位监听、持久化或 raft 初始化问题。
+	} // 节点启动错误处理结束。
 
-	for i := 0; i < n; i++ {
-		applyChs[i] = make(chan raft.ApplyMsg, 1000) // buffer 避免阻塞
-	}
+	defer func() { // 注册退出清理逻辑，确保 run 返回前关闭节点资源。
+		if err := node.Close(); err != nil { // 关闭 raft、gRPC server、listener 和 peer 连接。
+			fmt.Fprintf(os.Stderr, "close node error: %v\n", err) // 关闭失败只记录，不覆盖主流程错误。
+		} // 关闭错误处理结束。
+	}() // defer 注册结束。
 
-	var peerHandlers []*grpctransport.RaftServer
+	fmt.Printf("node %d running: peer=%s client=%s data=%s\n", cfg.ID, cfg.PeerAddr, cfg.ClientAddr, cfg.DataDir) // 输出当前节点运行信息。
+	sig := waitForShutdownSignal()                                                                                // 阻塞等待 Ctrl-C 或 SIGTERM。
+	fmt.Printf("node %d stopping: signal=%s\n", cfg.ID, sig.String())                                             // 输出停止原因，方便脚本和日志排查。
 
-	peerListeners := make([]net.Listener, n)
-	peerServers := make([]*gogrpc.Server, n)
-	peerConns := make([][]*gogrpc.ClientConn, n)
-	peerHandlers = make([]*grpctransport.RaftServer, n)
+	return nil // 正常收到退出信号后返回成功。
+} // run 结束。
 
-	for i := 0; i < n; i++ {
-		lis, err := net.Listen("tcp", peerAddrs[i])
-		if err != nil {
-			panic(err)
-		}
+// waitForShutdownSignal 负责等待进程级退出信号，并在返回前停止 signal 通知。
+func waitForShutdownSignal() os.Signal {
+	sigCh := make(chan os.Signal, 1)                    // 创建带缓冲的信号通道，避免信号到达时无人接收而丢失。
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM) // 订阅 Ctrl-C 和 kill 默认使用的 SIGTERM。
+	defer signal.Stop(sigCh)                            // 函数返回前取消信号订阅，避免泄漏通知目标。
 
-		srv := gogrpc.NewServer()
-		handler := grpctransport.NewRaftServer(nil)
-		raftpb.RegisterRaftServer(srv, handler)
-		
-		peerListeners[i] = lis
-		peerServers[i] = srv
-		peerHandlers[i] = handler
-
-		go func(s *gogrpc.Server, l net.Listener) {
-			if err := s.Serve(l); err != nil {
-				Tools.Error("raft grpc server stopped", err)
-			}
-		}(srv, lis)
-	}
-
-	for i := range peers {
-		peers[i] = make([]raft.Peer, n)
-		peerConns[i] = make([]*gogrpc.ClientConn, n)
-		for j := 0; j < n; j++ {
-			conn, err := gogrpc.Dial(
-				peerAddrs[j],
-				gogrpc.WithTransportCredentials(insecure.NewCredentials()),
-			)
-			if err != nil {
-				panic(err)
-			}
-			peerConns[i][j] = conn
-			peers[i][j] = grpctransport.NewGrpcPeer(conn)
-		}
-	}
-
-	defer func() {
-		for i := range peerConns {
-			for j := range peerConns[i] {
-				if peerConns[i][j] != nil {
-					_ = peerConns[i][j].Close()
-				}
-			}
-		}
-	}()
-
-	defer func() {
-		for i := range peerServers {
-			if peerServers[i] != nil {
-				peerServers[i].Stop()
-			}
-			if peerListeners[i] != nil {
-				_ = peerListeners[i].Close()
-			}
-		}
-	}()
-
-	for i := 0; i < n; i++ {
-		ps := persister.MakePersister()
-		rafts[i] = raft.Make(peers[i], i, ps, applyChs[i])
-		peerHandlers[i].SetRaft(rafts[i])
-	}
-
-	for i := 0; i < n; i++ {
-		stores[i] = mvcc.NewKVStore()
-		core := kvserver.NewServer(i, rafts[i], stores[i], applyChs[i])
-		KVservers[i] = core
-	}
-
-	kvListeners := make([]net.Listener, n)
-	kvRPCServers := make([]*gogrpc.Server, n)
-
-	for i := 0; i < n; i++ {
-		lis, err := net.Listen("tcp", clientAddrs[i])
-		if err != nil {
-			panic(err)
-		}
-
-		srv := gogrpc.NewServer()
-		kvpb.RegisterKVServer(srv, kvserver.NewRPCAdapter(KVservers[i]))
-		
-		kvListeners[i] = lis
-		kvRPCServers[i] = srv
-
-		go func(s *gogrpc.Server, l net.Listener) {
-			if err := s.Serve(l); err != nil {
-				Tools.Error("kv grpc server stopped", err)
-			}
-		}(srv, lis)
-	}
-
-	defer func() {
-		for i := range kvRPCServers {
-			if kvRPCServers[i] != nil {
-				kvRPCServers[i].Stop()
-			}
-			if kvListeners[i] != nil {
-				_ = kvListeners[i].Close()
-			}
-		}
-	}()
-	
-	// 等待 leader 选举完成
-	leader := findLeader(rafts, n)
-	Tools.Debug(fmt.Sprintf("Leader Success, leader = %d", leader))
-
-	var ck *client.Client
-
-	kvConns := make([]*gogrpc.ClientConn, n)
-	rpcClients := make([]client.RPCClient, n)
-
-	for i := 0; i < n; i++ {
-		conn, err := gogrpc.Dial(
-			clientAddrs[i],
-			gogrpc.WithTransportCredentials(insecure.NewCredentials()),
-		)
-		if err != nil {
-			panic(err)
-		}
-		kvConns[i] = conn
-		rpcClients[i] = client.NewGrpcClient(conn)
-	}
-
-	defer func() {
-		for i := range kvConns {
-			if kvConns[i] != nil {
-				_ = kvConns[i].Close()
-			}
-		}
-	}()
-
-	ck = client.Make(rpcClients)
-
-	// 压测函数
-	runStressTest := func(numClients, numOps int) {
-		doneCh := make(chan struct{})
-		for c := 0; c < numClients; c++ {
-			go func(cid int) {
-
-				for i := 0; i < numOps; i++ {
-					key := fmt.Sprintf("k-%d", i)
-					val := []byte(fmt.Sprintf("v-%d-%d", i, cid))
-					ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-					defer cancel()
-					err := ck.Put(ctx, key, val)
-					if err != nil {
-						Tools.Error("压测函数的Put error", err)
-					}
-					v, err := ck.Get(ctx, key)
-					if err != nil {
-						Tools.Error("压测函数的Get error", err)
-					}
-					Tools.RIGHT("Get = ", v)
-				}
-				doneCh <- struct{}{}
-			}(c)
-		}
-		for i := 0; i < numClients; i++ {
-			<-doneCh
-		}
-		Tools.Debug("Stress test finished")
-	}
-
-	// 运行压测：20 个客户端，每个客户端 50 次操作
-	runStressTest(20, 50)
-}
-
-func findLeader(rafts []*raft.Raft, n int) int {
-	for {
-		for i := 0; i < n; i++ {
-			if id, isLeader := rafts[i].GetState(); isLeader {
-				return id
-			}
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-}
+	return <-sigCh // 阻塞直到收到退出信号，并把信号返回给调用方记录日志。
+} // waitForShutdownSignal 结束。
