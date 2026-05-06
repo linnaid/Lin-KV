@@ -14,26 +14,25 @@ func NewKVStore() *KVStore {
 	})
 }
 
-func NewKVStoreWithOptions(opts StoreOptions) *KVStore {
+func NewKVStoreWithBackend(backend Backend, opts StoreOptions) *KVStore {
+	if backend == nil {
+		backend = NewMemoryBackend()
+	}
+
 	kv := &KVStore{
-		data: make(map[string][]ValueRevision),
+		backend: backend,
 
-		events: make([]Event, 0, 1024),
-
-		watchers:       make(map[string][]*Watcher),
+		watchers: make(map[string][]*Watcher),
 		prefixWatchers: make(map[string][]*Watcher),
-		watchersByID:   make(map[int64]*Watcher),
+		watchersByID: make(map[int64]*Watcher),
 
 		keyLease: make(map[string]int64),
-
 		eventCh: make(chan Event, 1024),
 	}
 
 	leaseMgr := NewLeaseManager(kv)
-
 	kv.leaseMgr = leaseMgr
 
-	// 开始循环leaseMgr，自动过期清理
 	if opts.LeaseExpireMode == LeaseExpireLocal {
 		go leaseMgr.expirationLoop()
 	}
@@ -41,6 +40,10 @@ func NewKVStoreWithOptions(opts StoreOptions) *KVStore {
 	go kv.dispatcherLoop()
 
 	return kv
+}
+
+func NewKVStoreWithOptions(opts StoreOptions) *KVStore {
+	return NewKVStoreWithBackend(NewMemoryBackend(), opts)
 }
 
 // 覆盖写，不区分是否存在
@@ -86,21 +89,24 @@ func (s *KVStore) Put(k string, v []byte, leaseID int64) (Revision, error) {
 }
 
 func (s *KVStore) putLocked(k string, v []byte) (Revision, Event) {
-	s.currentRev++
+	currentRev := s.backend.CurrentRev() + 1
+	s.backend.SetCurrentRev(currentRev)
 
 	rev := Revision{
-		Main: s.currentRev,
+		Main: currentRev,
 		Sub:  0,
 	}
 
 	value := make([]byte, len(v))
 	copy(value, v)
 
-	s.data[k] = append(s.data[k], ValueRevision{
-		Rev:     rev,
-		Value:   value,
+	versions, _ := s.backend.GetRevisions(k)
+	versions = append(versions, ValueRevision{
+		Rev: rev,
+		Value: value,
 		Deleted: false,
 	})
+	s.backend.SetRevisions(k, versions)
 
 	eVal := make([]byte, len(value))
 	copy(eVal, value)
@@ -112,7 +118,7 @@ func (s *KVStore) putLocked(k string, v []byte) (Revision, Event) {
 		Rev:   rev,
 	}
 
-	s.events = append(s.events, ev)
+	s.backend.AppendEvent(ev)
 
 	return rev, ev
 }
@@ -121,18 +127,19 @@ func (s *KVStore) Get(k string, rev int64) ([]byte, int64, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	version, ok := s.data[k]
+	version, ok := s.backend.GetRevisions(k)
 	if !ok {
 		return nil, rev, false
 	}
 
-	if rev != 0 && rev <= s.compactRev {
-		Tools.Warn("rev <= s.compactRev", rev, s.compactRev)
+	compactRev := s.backend.CompactRev()
+	if rev != 0 && rev <= compactRev {
+		Tools.Warn("rev <= s.compactRev,mvcc/kv_store.go", rev, compactRev)
 		return nil, rev, false
 	}
 
 	if rev == 0 {
-		rev = s.currentRev
+		rev = s.backend.CurrentRev()
 	}
 
 	if len(version) == 0 {
@@ -156,7 +163,7 @@ func (s *KVStore) Get(k string, rev int64) ([]byte, int64, bool) {
 	}
 
 	if pos == -1 {
-		Tools.Warn("pos == -1", s.currentRev)
+		Tools.Warn("pos == -1", s.backend.CurrentRev())
 		return nil, rev, false
 	}
 
@@ -194,16 +201,20 @@ func (s *KVStore) Delete(k string) Revision {
 }
 
 func (s *KVStore) deleteLocked(k string) (Revision, Event) {
-	s.currentRev++
+	currentRev := s.backend.CurrentRev() + 1
+	s.backend.SetCurrentRev(currentRev)
+
 	rev := Revision{
-		Main: s.currentRev,
+		Main: currentRev,
 		Sub:  0,
 	}
 
-	s.data[k] = append(s.data[k], ValueRevision{
-		Rev:     rev,
+	versions, _ := s.backend.GetRevisions(k)
+	versions = append(versions, ValueRevision{
+		Rev: rev,
 		Deleted: true,
 	})
+	s.backend.SetRevisions(k, versions)
 
 	ev := Event{
 		Type:  EventDelete,
@@ -212,7 +223,7 @@ func (s *KVStore) deleteLocked(k string) (Revision, Event) {
 		Value: nil,
 	}
 
-	s.events = append(s.events, ev)
+	s.backend.AppendEvent(ev)
 	s.leaseMgr.detachKeyLocked(k)
 
 	return rev, ev
@@ -313,10 +324,13 @@ func (s *KVStore) Restore(snapshot []byte) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.data = dataMap
-	s.currentRev = snap.CurrentRev
-	s.compactRev = snap.CompactRev
-	s.events = events
+
+	s.backend.ReplaceState(BackendState{
+		Data: dataMap,
+		CurrentRev: snap.CurrentRev,
+		CompactRev: snap.CompactRev,
+		Events: events,
+	})
 	s.keyLease = keylease
 	s.leaseMgr.nextLeaseID = snap.NextLeaseId
 	s.leaseMgr.leases = leases
@@ -328,9 +342,18 @@ func (s *KVStore) Snapshot() []byte {
 	// 锁下神拷贝
 	s.mu.RLock()
 
-	newMap := make(map[string][]ValueRevision, len(s.data))
+	state := s.backend.SnapshotState()
 
-	for k, versions := range s.data {
+	keylease := make(map[string]int64, len(s.keyLease))
+	for k, leaseID := range s.keyLease {
+		keylease[k] = leaseID
+	}
+	leases, nextleaseID := s.leaseMgr.snapshot()
+
+
+	newMap := make(map[string][]ValueRevision, len(state.Data))
+
+	for k, versions := range state.Data {
 		newSlice := make([]ValueRevision, len(versions))
 
 		for i, v := range versions {
@@ -348,8 +371,8 @@ func (s *KVStore) Snapshot() []byte {
 		newMap[k] = newSlice
 	}
 
-	events := make([]*mvcc.Event, 0, len(s.events))
-	for _, ev := range s.events {
+	events := make([]*mvcc.Event, 0, len(state.Events))
+	for _, ev := range state.Events {
 		events = append(events, &mvcc.Event{
 			Type:  mvcc.EventType(ev.Type),
 			Key:   ev.Key,
@@ -370,15 +393,8 @@ func (s *KVStore) Snapshot() []byte {
 		return a.Sub < b.Sub
 	})
 
-	keylease := make(map[string]int64, len(s.keyLease))
-	for k, leaseID := range s.keyLease {
-		keylease[k] = leaseID
-	}
-
-	leases, nextLeaseID := s.leaseMgr.snapshot()
-
-	currentRev := s.currentRev
-	compactRev := s.compactRev
+	currentRev := state.CurrentRev
+	compactRev :=  state.CompactRev
 
 	s.mu.RUnlock()
 
@@ -431,7 +447,7 @@ func (s *KVStore) Snapshot() []byte {
 		Events:      events,
 		Leases:      leases,
 		KeyLease:    keylease,
-		NextLeaseId: nextLeaseID,
+		NextLeaseId: nextleaseID,
 	}
 
 	// 序列化

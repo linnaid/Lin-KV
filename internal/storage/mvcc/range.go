@@ -2,34 +2,28 @@ package mvcc
 
 import "sort"
 
-// func (s *KVStore) Range(start , end string, rev int64) map[string][]byte {
-// 	result := make(map[string][]byte, len(s.data))
-// 	for k, _ := range s.data {
-// 		if k >= start && k < end {
-// 			v, ok := s.Get(k, rev)
-// 			if ok {
-// 				result[k] = v
-// 			}
-// 		}
-// 	}
-// 	return result
-// }
 
 func (s *KVStore) Range(startKey, endKey string, rev int64) []KeyValue {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	if rev == 0 {
-		rev = s.currentRev
+		rev = s.backend.CurrentRev()
 	}
-	if rev <= s.compactRev {
+	if rev <= s.backend.CompactRev() {
 		return nil
 	}
 
-	result := make([]KeyValue, 0, len(s.data))
+	keys := s.backend.Keys()
+	result := make([]KeyValue, 0, len(keys))
 
-	for key, v := range s.data {
+	for _, key := range keys {
 		if key >= startKey && key < endKey {
+			v, ok := s.backend.GetRevisions(key)
+			if !ok {
+				continue
+			}
+
 			n := len(v)
 			for i := n - 1; i >= 0; i-- {
 				if v[i].Rev.Main <= rev {
@@ -60,7 +54,7 @@ func (s *KVStore) Range(startKey, endKey string, rev int64) []KeyValue {
 
 func (s *KVStore) PrefixRange(prefix string, rev int64) []KeyValue {
 	if rev == 0 {
-		rev = s.currentRev
+		rev = s.backend.CurrentRev()
 	}
 	
 	end := prefixEnd(prefix)

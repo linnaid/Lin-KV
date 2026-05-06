@@ -11,7 +11,7 @@ func (s *KVStore) Txn(txn Txn) (bool, []KeyValue, error) {
 	compareResult := true
 	for _, t := range txn.Compares {
 		var currentRev int64
-		versions, ok := s.data[t.Key]
+		versions, ok := s.backend.GetRevisions(t.Key)
 		if !ok {
 			currentRev = 0
 		} else {
@@ -66,7 +66,7 @@ func (s *KVStore) Txn(txn Txn) (bool, []KeyValue, error) {
 
 		switch op.Type {
 		case OpGet:
-			versions, ok := s.data[op.Key]
+			versions, ok := s.backend.GetRevisions(op.Key)
 			if !ok {
 				Tools.Debug("OpGet返回错误，Txn", op.Key)
 			} else {

@@ -10,12 +10,19 @@ func (s *KVStore) Compact(rev int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if rev <= s.compactRev || rev > s.currentRev {
-		Tools.Warn("压缩不正确", rev, s.compactRev, s.currentRev)
+	compactRev := s.backend.CompactRev()
+	currentRev := s.backend.CurrentRev()
+	if rev <= compactRev || rev > currentRev {
+		Tools.Warn("压缩不正确", rev, compactRev, currentRev)
 		return ErrCompacted
 	}
 
-	for key, versions := range s.data {
+	for _, key := range s.backend.Keys() {
+		versions, ok := s.backend.GetRevisions(key)
+		if !ok {
+			continue
+		}
+
 		var index int
 		index = -1
 
@@ -42,29 +49,25 @@ func (s *KVStore) Compact(rev int64) error {
 		}
 	}
 
-	newEvents := s.events[:0]
+	events := s.backend.Events()
+	newEvents := make([]Event, 0, len(events))
 
-	for _, e := range s.events {
+	for _, e := range events {
 		if e.Rev.Main > rev {
 			newEvents = append(newEvents, e)
 		}
 	}
 
-	s.events = newEvents
-
-	s.compactRev =  rev
+	s.backend.SetEvents(newEvents)
+	s.backend.SetCompactRev(rev)
 	
 	return nil
 }
 
 func (s *KVStore) makeSlice(index int, versions []ValueRevision, key string) {
-	// e_keep := s.events[index-1:]
-	// new_e_Slice := make([]Event, len(e_keep))
-	// copy(new_e_Slice, e_keep)
-	// s.events = e_keep
-	
+
 	keep := versions[index-1:]
 	newSlice := make([]ValueRevision, len(keep))
 	copy(newSlice, keep)
-	s.data[key] = newSlice
+	s.backend.SetRevisions(key, newSlice)
 }

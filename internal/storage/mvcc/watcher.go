@@ -7,26 +7,13 @@ import (
 
 // 2
 
-// func (s *KVStore) Watcsh(key string, fromRev int64) []Event {
-// 	s.mu.RLock()
-// 	defer s.mu.RUnlock()
-
-// 	var result []Event
-// 	for _, event := range s.events {
-// 		if event.Rev.Main >= fromRev && event.Key == key {
-// 			result = append(result, event)
-// 		}
-// 	}
-
-// 	return result
-// }
-
 func (s *KVStore) Watch(key string, fromRev int64, prefix bool) (<-chan Event, int64, error) {
 	s.mu.Lock()
 
-	if fromRev <= s.compactRev {
+	compactRev := s.backend.CompactRev()
+	if fromRev <= compactRev {
 		s.mu.Unlock()
-		Tools.Error("请求的是已被压缩的版本", fromRev, s.compactRev)
+		Tools.Error("请求的是已被压缩的版本", fromRev, compactRev)
 		return nil, -1, ErrCompacted
 	}
 
@@ -35,9 +22,10 @@ func (s *KVStore) Watch(key string, fromRev int64, prefix bool) (<-chan Event, i
 
 	ch := make(chan Event, 16)
 
-	backlog := make([]Event, 0, len(s.events))
+	events := s.backend.Events()
+	backlog := make([]Event, 0, len(events))
 	lastSentRev := fromRev - 1
-	for _, e := range s.events {
+	for _, e := range events {
 		if prefix {
 			if strings.HasPrefix(e.Key, key) && e.Rev.Main >= fromRev {
 				backlog = append(backlog, e)

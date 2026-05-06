@@ -19,12 +19,7 @@ const (
 type KVStore struct {
 	mu sync.RWMutex
 	
-	data map[string][]ValueRevision
-
-	currentRev int64
-	compactRev int64
-
-	events []Event
+	backend Backend
 
 	watchers map[string][]*Watcher
 	watchersByID map[int64]*Watcher
