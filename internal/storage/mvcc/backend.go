@@ -20,7 +20,10 @@ type Backend interface {
 	GetRevisions(key string) ([]ValueRevision, bool)
 	SetRevisions(key string, revisions []ValueRevision)
 
-	Keys() []string
+	// Keys() []string
+	// 返回有序 Key 集合
+	RangeKeys(startKey, endKey string) []string
+
 	Events() []Event
 	SetEvents(events []Event)
 	AppendEvent(event Event)
