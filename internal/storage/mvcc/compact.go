@@ -17,36 +17,14 @@ func (s *KVStore) Compact(rev int64) error {
 		return ErrCompacted
 	}
 
-	for _, key := range s.backend.Keys() {
+	for _, key := range s.backend.RangeKeys("", "") {
 		versions, ok := s.backend.GetRevisions(key)
-		if !ok {
+		if !ok || len(versions) <= 1 {
 			continue
 		}
 
-		var index int
-		index = -1
-
-		if len(versions) <= 1 {
-			continue
-		}
-
-		for i, v := range versions {
-			if v.Rev.Main > rev {
-				index = i
-				break
-			}
-		}
-
-		var l int
-		l = len(versions) - 1
-
-		if index == 0 {
-			continue
-		} else if index == -1 {
-			s.makeSlice(l+1, versions, key)
-		} else {
-			s.makeSlice(index, versions, key)
-		}
+		firstAfter := firstRevisionAfter(versions, rev)
+		s.rewriteCompactedHistory(key, versions, firstAfter)
 	}
 
 	events := s.backend.Events()
@@ -64,10 +42,16 @@ func (s *KVStore) Compact(rev int64) error {
 	return nil
 }
 
-func (s *KVStore) makeSlice(index int, versions []ValueRevision, key string) {
+func (s *KVStore) rewriteCompactedHistory(key string, versions []ValueRevision, firstAfter int) {
+	if firstAfter == 0 {
+		return
+	}
 
-	keep := versions[index-1:]
-	newSlice := make([]ValueRevision, len(keep))
-	copy(newSlice, keep)
-	s.backend.SetRevisions(key, newSlice)
+	keepFrom := len(versions) - 1
+	if firstAfter > 0 {
+		keepFrom = firstAfter - 1
+	}
+
+	kept := cloneValueRevisions(versions[keepFrom:])
+	s.backend.SetRevisions(key, kept)
 }

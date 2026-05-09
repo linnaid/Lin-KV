@@ -1,7 +1,5 @@
 package mvcc
 
-import "sort"
-
 
 func (s *KVStore) Range(startKey, endKey string, rev int64) []KeyValue {
 	s.mu.RLock()
@@ -14,7 +12,7 @@ func (s *KVStore) Range(startKey, endKey string, rev int64) []KeyValue {
 		return nil
 	}
 
-	keys := s.backend.Keys()
+	keys := s.backend.RangeKeys(startKey, endKey)
 	result := make([]KeyValue, 0, len(keys))
 
 	for _, key := range keys {
@@ -24,38 +22,24 @@ func (s *KVStore) Range(startKey, endKey string, rev int64) []KeyValue {
 				continue
 			}
 
-			n := len(v)
-			for i := n - 1; i >= 0; i-- {
-				if v[i].Rev.Main <= rev {
-					if v[i].Deleted {
-						break
-					}
-
-					val := make([]byte, len(v[i].Value))
-					copy(val, v[i].Value)
-
-					result = append(result, KeyValue{
-						Key: key,
-						Value: val,
-						Rev: v[i].Rev,
-					})
-					break
-				}
+			visible, ok := latestVisibleRevision(v, rev)
+			if !ok {
+				continue
 			}
+
+			value := append([]byte(nil), visible.Value...)
+			result = append(result, KeyValue{
+				Key: key,
+				Value: value,
+				Rev: visible.Rev,
+			})
 		}
 	}
-
-	sort.Slice(result, func (i, j int) bool {
-		return result[i].Key < result[j].Key
-	})
 
 	return result
 }
 
 func (s *KVStore) PrefixRange(prefix string, rev int64) []KeyValue {
-	if rev == 0 {
-		rev = s.backend.CurrentRev()
-	}
 	
 	end := prefixEnd(prefix)
 

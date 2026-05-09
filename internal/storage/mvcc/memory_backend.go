@@ -3,8 +3,11 @@
 // 保持行为不变，同时为后续替换成 LSM backend 预留接缝
 package mvcc
 
+import "sort"
+
 type MemoryBackend struct {
 	data  map[string][]ValueRevision
+	sortedKeys []string
 	events []Event
 	currentRev int64
 	compactRev int64
@@ -13,6 +16,7 @@ type MemoryBackend struct {
 func NewMemoryBackend() *MemoryBackend {
 	return &MemoryBackend{
 		data: make(map[string][]ValueRevision),
+		sortedKeys: make([]string, 0),
 		events: make([]Event, 0, 1024),
 	}
 }
@@ -43,16 +47,25 @@ func (b *MemoryBackend) GetRevisions(key string) ([]ValueRevision, bool) {
 }
 
 func (b *MemoryBackend) SetRevisions(key string, revisions []ValueRevision) {
-	b.data[key] = cloneValueRevisions(revisions)
-}
-
-func (b *MemoryBackend) Keys() []string {
-	keys := make([]string, 0, len(b.data))
-	for key := range b.data {
-		keys = append(keys, key)
+	cloned := cloneValueRevisions(revisions)
+	if len(cloned) == 0 {
+		delete(b.data, key)
+		b.deleteKeyFromIndex(key)
+		return
 	}
 
-	return keys
+	if _, existed := b.data[key]; !existed {
+		b.insertKeyIntoIndex(key)
+	}
+
+	b.data[key] = cloned
+}
+
+func (b *MemoryBackend) RangeKeys(startKey, endKey string) []string {
+	start := orderedKeyRangeStart(b.sortedKeys, startKey)
+	end := orderedKeyRangeEnd(b.sortedKeys, start, endKey)
+
+	return append([]string(nil), b.sortedKeys[start:end]...)
 }
 
 func (b *MemoryBackend) Events() []Event {
@@ -76,9 +89,44 @@ func (b *MemoryBackend) SnapshotState() BackendState {
 	}
 }
 
+// 用快照状态恢复 backend，并重建派生索引
 func (b *MemoryBackend) ReplaceState(state BackendState) {
 	b.data = cloneData(state.Data)
+	b.rebuildKeyIndex()
 	b.events = cloneEvents(state.Events)
 	b.currentRev = state.CurrentRev
 	b.compactRev = state.CompactRev
+}
+
+func (b *MemoryBackend) insertKeyIntoIndex(key string) {
+	pos := orderedKeyRangeStart(b.sortedKeys, key)
+
+	if pos < len(b.sortedKeys) && b.sortedKeys[pos] == key {
+		return
+	}
+
+	b.sortedKeys = append(b.sortedKeys, "")
+	copy(b.sortedKeys[pos+1:], b.sortedKeys[pos:])
+
+	b.sortedKeys[pos] = key
+}
+
+func (b *MemoryBackend) deleteKeyFromIndex(key string) {
+	pos := orderedKeyRangeStart(b.sortedKeys, key)
+
+	if pos >= len(b.sortedKeys) || b.sortedKeys[pos] != key {
+		return
+	}
+
+	b.sortedKeys = append(b.sortedKeys[:pos], b.sortedKeys[pos+1:]...)
+}
+
+func (b *MemoryBackend) rebuildKeyIndex() {
+	keys := make([]string, 0, len(b.data))
+	for key := range b.data {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+	b.sortedKeys = keys
 }
