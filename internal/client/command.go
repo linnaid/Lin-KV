@@ -6,70 +6,6 @@ import (
 	"etcd-KV/internal/api/kv/model"
 )
 
-// func (c *Client) Put(ctx context.Context, key string, value []byte) error {
-// 	seq := c.getSeq()
-// 	// Tools.Debug("?")
-// 	retry := 0
-// 	for {
-// 		select {
-// 		case <-ctx.Done():
-// 			return ctx.Err()
-// 		default:
-// 		}
-
-// 		// Tools.Debug("?", len(c.servers))
-// 		for i := 0; i < len(c.servers); i++ {
-// 			// Tools.Debug("?", len(c.servers))
-// 			req := &kv.PutRequest{
-// 				Key: key,
-// 				Value: value,
-// 				ClientID: c.clientID,
-// 				Seq: seq,
-// 			}
-// 			reply := &kv.PutResponse{}
-
-// 			srv := (c.leader + i) % len(c.servers)
-
-// 			ok := c.callOnce(srv, "RPCAdapter.Put", req, reply)
-
-// 			if !ok {
-// 				Tools.Debug("client/command: Put RPC error", srv)
-
-// 				c.updateLeader((srv + 1) % len(c.servers))
-// 				continue
-// 			}
-// 			// if reply.Err != "" {
-// 			// 	// Tools.Debug("rrr?")
-// 			// 	Tools.Error("reply.Err", reply.Err)
-// 			// 	continue
-// 			// }
-// 			err := parseErr(reply.Err)
-// 			if err != nil {
-// 				if err == ErrNotLeader {
-// 					continue
-// 				}
-// 				// 其他错误后续返回给上层
-// 				Tools.Error("Put error", err)
-// 				return err
-// 			}
-
-// 			c.updateLeader(srv)
-// 			return nil
-// 		}
-
-// 		retry++
-// 		if retry > 3 {
-// 			return ErrRPC
-// 		}
-
-// 		select {
-// 		case <-time.After(20 * time.Millisecond):
-// 		case <-ctx.Done():
-// 			return ctx.Err()
-// 		}
-// 		// time.Sleep(20 * time.Millisecond)
-// 	}
-// }
 
 func (c *Client) Put(ctx context.Context, key string, value []byte) error {
 	seq := c.getSeq()
@@ -123,70 +59,6 @@ func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
 	return result, err
 }
 
-// func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
-// 	seq := c.getSeq()
-// 	retry := 0
-
-// 	for {
-// 		select {
-// 		case <- ctx.Done():
-// 			return nil, ctx.Err()
-// 		default:
-// 		}
-
-// 		for i := 0; i < len(c.servers); i++ {
-// 			req := &kv.GetRequest{
-// 				Key: key,
-// 				ClientID: c.clientID,
-// 				Seq: seq,
-// 			}
-// 			reply := &kv.GetResponse{}
-
-// 			srv := (c.leader + i) % len(c.servers)
-
-// 			ok := c.callOnce(srv, "RPCAdapter.Get", req, reply)
-
-// 			if !ok {
-// 				Tools.Debug("client/command: Get RPC error", srv)
-
-// 				c.updateLeader((srv + 1) % len(c.servers))
-// 				continue
-// 			}
-// 			// if reply.Err == ErrNotLeader.Error() {
-// 			// 	continue
-// 			// }
-// 			// if reply.Err != "" {
-// 			// 	Tools.Debug("111")
-// 			// 	Tools.Error("reply.Err", reply.Err)
-// 			// 	return nil
-// 			// }
-// 			err := parseErr(reply.Err)
-// 			if err != nil {
-// 				if err == ErrNotLeader {
-// 					continue
-// 				}
-// 				// 其他错误后续返回给上层
-// 				Tools.Error("Get error", err)
-// 				return  nil, err
-// 			}
-
-// 			c.updateLeader(srv)
-// 			return reply.Value, nil
-// 		}
-
-// 		retry++
-// 		if retry > 3 {
-// 			return nil, ErrRPC
-// 		}
-
-// 		select {
-// 		case <-time.After(20 * time.Millisecond):
-// 		case <-ctx.Done():
-// 			return nil, ctx.Err()
-// 		}
-// 	}
-// }
-
 func parseErr(errStr string) error {
 	if errStr == "" {
 		return nil
@@ -197,4 +69,48 @@ func parseErr(errStr string) error {
 	}
 
 	return errors.New(errStr)
+}
+
+func (c *Client) RangePrefix(ctx context.Context, prefix string) ([]*kv.KeyValue, int64, error) {
+	return c.RangePrefixAtRevision(ctx, prefix, 0)
+}
+
+func (c *Client) RangePrefixAtRevision(ctx context.Context, prefix string, rev int64) ([]*kv.KeyValue, int64, error) {
+	seq := c.getSeq()
+	var finalReply *kv.RangeResponse
+
+	err := c.callWithRetry(ctx, func(srv int) error {
+		req := &kv.RangeRequest{
+			Key: prefix,
+			Prefix: true,
+			Revision: rev,
+			ClientID: c.clientID,
+			Seq: seq,
+		}
+
+		reply := &kv.RangeResponse{}
+
+		ok := c.callOnce(ctx, srv, "RPCAdapter.Range", req, reply)
+		if !ok {
+			return ErrRPC
+		}
+
+		err := parseErr(reply.Err)
+		if err != nil {
+			return err
+		}
+
+		finalReply = reply
+		return nil
+	})
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if finalReply == nil {
+		return nil, 0, ErrRPC
+	}
+
+	return finalReply.KVs, finalReply.Revision, nil
 }

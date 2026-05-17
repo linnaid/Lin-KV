@@ -162,3 +162,14 @@ func (r *RPCAdapter) LeaseKeepAlive(stream pb.KV_LeaseKeepAliveServer) error {
 		}
 	}
 }
+
+func (r *RPCAdapter) Range(ctx context.Context, req *pb.RangeRequest) (*pb.RangeResponse, error) {
+	resp, err := r.server.Range(ctx, fromPBRangeRequest(req))
+	out := toPBRangeResponse(resp)
+	if err != nil {
+		out.Err = err.Error()
+		return out, nil
+	}
+
+	return out, nil
+}

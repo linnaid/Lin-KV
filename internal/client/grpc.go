@@ -58,6 +58,18 @@ func (c *GrpcClient) Call(ctx context.Context, method string,
 		fillDeleteResponseFromPB(rep, res)
 		return nil
 
+	case "RPCAdapter.Range":
+		r := toPBRangeRequest(req.(*kv.RangeRequest))
+		rep := resp.(*kv.RangeResponse)
+
+		res, err := c.cli.Range(ctx, r)
+		if err != nil {
+			return err
+		}
+
+		fillRangeResponseFromPB(rep, res)
+		return nil
+		
 	default:
 		return fmt.Errorf("Unknown method %s", method)
 	}

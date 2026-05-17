@@ -20,6 +20,8 @@ service KV {
 
     rpc LeaseKeepAlive(stream LeaseKeepAliveRequest)
         returns (stream LeaseKeepAliveResponse);
+
+    rpc Range(RangeRequest) returns (RangeResponse);
 }
 
 message PutRequest {
@@ -148,4 +150,17 @@ message LeaseKeepAliveResponse {
     int64 id = 1;
     string err = 2;
     int64 ttl = 3;
+}
+
+message RangeRequest {
+    string key = 1;
+    int64 revision = 2;
+    int64 client_id = 3;
+    bool prefix = 4;
+    int64 seq = 5;
+}
+message RangeResponse {
+    repeated KeyValue kvs = 1;
+    int64 revision = 2;
+    string err = 3;
 }

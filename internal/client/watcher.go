@@ -12,22 +12,29 @@ import (
 
 // /////////////////////////////////////////////////
 func (c *Client) Watch(ctx context.Context, key string) <-chan *kv.Event {
-	return  c.watchStream(ctx, key, false)
+	return  c.watchStream(ctx, key, false, 1)
 }
 
 func (c *Client) WatchPrefix(ctx context.Context, prefix string) <-chan *kv.Event {
-	return c.watchStream(ctx, prefix, true)
+	return c.watchStream(ctx, prefix, true, 1)
+}
+
+func (c *Client) WatchFrom(ctx context.Context, key string, fromRev int64) <-chan *kv.Event {
+	return c.watchStream(ctx, key, false, fromRev)
 }
 
 // 后面要改成leader routing
-func (c *Client) watchStream(ctx context.Context, key string, prefix bool) <-chan *kv.Event {
+func (c *Client) watchStream(ctx context.Context, key string, prefix bool, startRev int64) <-chan *kv.Event {
 	ch := make(chan *kv.Event, 100)
+	rev := startRev
+	if rev <= 0 {
+		rev = 1
+	}
 
 	go func() {
 		defer close(ch)
 
 		// var rev int64 = 0
-		rev := int64(1)
 		backoff := 100 * time.Millisecond
 
 		for {

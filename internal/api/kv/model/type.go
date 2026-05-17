@@ -157,3 +157,17 @@ type LeaseKeepAliveResponse struct {
 	TTL int64
 	Err string
 }
+
+type RangeRequest struct {
+	Key string
+	Prefix bool
+	Revision int64
+	ClientID int64
+	Seq int64
+}
+
+type RangeResponse struct {
+	KVs  []*KeyValue
+	Revision int64
+	Err  string
+}

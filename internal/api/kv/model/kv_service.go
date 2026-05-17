@@ -22,5 +22,7 @@ type KVService interface{
 		req *LeaseRevokeRequest) (*LeaseRevokeResponse, error)
 	LeaseKeepAlive(ctx context.Context, 
 		req *LeaseKeepAliveRequest) (*LeaseKeepAliveResponse, error)
+
+	Range(ctx context.Context, req *RangeRequest) (*RangeResponse, error)
 }
 

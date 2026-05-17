@@ -38,6 +38,7 @@ func cloneResult(result Result) Result {
 		TxnResults: result.TxnResults,
 		LeaseID: result.LeaseID,
 		LeaseTTL: result.LeaseTTL,
+		RangeResults: cloneKeyValues(result.RangeResults),
 	}
 
 	if result.Err != nil {
@@ -109,6 +110,7 @@ func toPBResult(result Result) *kvserverpb.Result {
 		TxnResults: snapshotToPBKeyValues(result.TxnResults),
 		LeaseId: result.LeaseID,
 		LeaseTtl: result.LeaseTTL,
+		RangeResults: snapshotToPBKeyValues(result.RangeResults),
 	}
 
 	if result.Err != nil {
@@ -138,6 +140,7 @@ func fromPBResult(in *kvserverpb.Result) Result {
 		TxnResults: snapshotFromPBKeyValues(in.TxnResults),
 		LeaseID: in.LeaseId,
 		LeaseTTL: in.LeaseTtl,
+		RangeResults: snapshotFromPBKeyValues(in.RangeResults),
 	}
 
 	if in.Err != "" {

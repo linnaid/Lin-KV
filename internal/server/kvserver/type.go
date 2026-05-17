@@ -70,6 +70,8 @@ type Result struct {
 
 	LeaseID  int64
 	LeaseTTL int64
+
+	RangeResults []*kv.KeyValue
 }
 
 type watcher struct {

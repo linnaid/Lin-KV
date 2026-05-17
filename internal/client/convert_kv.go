@@ -131,3 +131,49 @@ func fromPBEvent(event *pb.Event) *kv.Event {
 		Rev:   event.Revision,
 	}
 }
+
+func toPBRangeRequest(req *kv.RangeRequest) *pb.RangeRequest {
+	if req == nil {
+		return nil
+	}
+
+	return &pb.RangeRequest{
+		Key: req.Key,
+		Revision: req.Revision,
+		ClientId: req.ClientID,
+		Prefix: req.Prefix,
+		Seq: req.Seq,
+	}
+}
+
+// 把 pb.RangeResponse 填回内部 model.RangeResponse
+func fillRangeResponseFromPB(dst *kv.RangeResponse, src *pb.RangeResponse) {
+	if dst == nil || src == nil {
+		return
+	}
+
+	dst.KVs = fromPBKeyValues(src.Kvs)
+	dst.Revision = src.Revision
+	dst.Err = src.Err
+}
+
+func fromPBKeyValues(items []*pb.KeyValue) []*kv.KeyValue {
+	if len(items) == 0 {
+		return nil
+	}
+
+	out := make([]*kv.KeyValue, 0, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+
+		out = append(out, &kv.KeyValue{
+			Key: item.Key,
+			Value: append([]byte(nil), item.Value...),
+			Revision: item.Revision,
+		})
+	}
+
+	return out
+}

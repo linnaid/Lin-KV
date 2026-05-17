@@ -283,3 +283,29 @@ func toPBLeaseKeepAliveResponse(resp *kv.LeaseKeepAliveResponse) *pb.LeaseKeepAl
 		Err: resp.Err,
 	}
 }
+
+func fromPBRangeRequest(req *pb.RangeRequest) *kv.RangeRequest {
+	if req == nil {
+		return nil
+	}
+
+	return &kv.RangeRequest{
+		Key: req.Key,
+		Prefix: req.Prefix,
+		Revision: req.Revision,
+		ClientID: req.ClientId,
+		Seq: req.Seq,
+	}
+}
+
+func toPBRangeResponse(resp *kv.RangeResponse) *pb.RangeResponse {
+	if resp == nil {
+		return nil
+	}
+
+	return &pb.RangeResponse{
+		Kvs: toPBKeyValues(resp.KVs),
+		Revision: resp.Revision,
+		Err: resp.Err,
+	}
+}

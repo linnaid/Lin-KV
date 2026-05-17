@@ -358,3 +358,78 @@ func (s *Server) leaseReaperLoop() {
 		}
 	}
 }
+
+func (s *Server) Range(ctx context.Context, req *kv.RangeRequest) (*kv.RangeResponse, error) {
+	if _, ok := s.raft.GetState(); !ok {
+		return nil, ErrNotLeader
+	}
+
+	reply := &kv.RangeResponse{}
+	////////////////////////////////////////////////////////////////////////
+	index, ok := s.raft.ReadIndex()
+	if !ok {
+		reply.Err = ErrNotLeader.Error()
+		return nil, ErrNotLeader
+	}
+
+	for {
+		applied := s.raft.LastApplied()
+		if applied >= index {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			reply.Err = ctx.Err().Error()
+			return reply, ctx.Err()
+		default:
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+
+	s.mu.Lock()
+	lastSeq := s.clientLastSeq[req.ClientID]
+
+	if req.Seq < lastSeq {
+		s.mu.Unlock()
+		return reply, nil
+	}
+
+	if req.Seq == lastSeq {
+		result := s.clientLastResult[req.ClientID]
+		if result.Rev != nil {
+			reply.Revision = result.Rev.Main
+		}
+		reply.KVs = cloneKeyValues(result.RangeResults)
+		s.mu.Unlock()
+		return reply, nil
+	}
+
+	readRev := req.Revision
+	if readRev == 0 {
+		readRev = s.store.CurrentRevision()
+	}
+
+	var kvs []*kv.KeyValue
+	if req.Prefix {
+		kvs = fromMVCCKeyValues(s.store.PrefixRange(req.Key, readRev))
+	} else {
+		endKey := req.Key + "\x00"
+		kvs = fromMVCCKeyValues((s.store.Range(req.Key, endKey, readRev)))
+	}
+
+	cached := Result{
+		Rev: &mvcc.Revision{
+			Main: readRev,
+		},
+		RangeResults: cloneKeyValues(kvs),
+	}
+
+	s.clientLastSeq[req.ClientID] = req.Seq
+	s.clientLastResult[req.ClientID] = cached
+	reply.Revision = readRev
+	reply.KVs = cloneKeyValues(kvs)
+	s.mu.Unlock()
+
+	return reply, nil
+}
