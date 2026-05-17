@@ -458,3 +458,9 @@ func (s *KVStore) Snapshot() []byte {
 
 	return data
 }
+
+func (s *KVStore) CurrentRevision() int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.backend.CurrentRev()
+}
