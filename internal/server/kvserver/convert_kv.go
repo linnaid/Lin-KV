@@ -300,7 +300,7 @@ func fromPBRangeRequest(req *pb.RangeRequest) *kv.RangeRequest {
 
 func toPBRangeResponse(resp *kv.RangeResponse) *pb.RangeResponse {
 	if resp == nil {
-		return nil
+		return &pb.RangeResponse{}
 	}
 
 	return &pb.RangeResponse{
