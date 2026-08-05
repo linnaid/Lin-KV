@@ -140,13 +140,20 @@ func (s *KVStore) ExpiredLeaseIDs(now time.Time, limit int) []int64 {
 }
 
 func (lm *LeaseManager) expirationLoop() {
+	defer lm.kv.closeWg.Done()
+
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
-	for now := range ticker.C {
-		expired := lm.ExpiredLeaseIDs(now, 64)
-		for _, leaseID := range expired {
-			_ = lm.LeaseRevoke(leaseID)
+	for {
+		select {
+		case <-lm.kv.closeCh:
+			return
+		case now := <-ticker.C:
+			expired := lm.ExpiredLeaseIDs(now, 64)
+			for _, leaseID := range expired {
+				_ = lm.LeaseRevoke(leaseID)
+			}
 		}
 	}
 }
@@ -186,7 +193,10 @@ func (lm *LeaseManager) LeaseRevoke(leaseID int64) error {
 	// 	lm.kv.Delete(key)
 	// }
 	for _, ev := range events {
-		lm.kv.eventCh <- ev
+		select {
+		case lm.kv.eventCh <- ev:
+		case <-lm.kv.closeCh:
+		}
 	}
 
 	return nil

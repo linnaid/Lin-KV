@@ -106,7 +106,10 @@ func (s *KVStore) Txn(txn Txn) (bool, []KeyValue, error) {
 	s.mu.Unlock()
 
 	for _, ev := range events {
-		s.eventCh <- ev
+		select {
+		case s.eventCh <- ev:
+		case <-s.closeCh:
+		}
 	}
 
 	return compareResult, result, nil

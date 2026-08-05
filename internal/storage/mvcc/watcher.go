@@ -76,12 +76,19 @@ func (s *KVStore) Watch(key string, fromRev int64, prefix bool) (<-chan Event, i
 }
 
 func (s *KVStore) dispatcherLoop() {
+	defer s.closeWg.Done()
 
 	for {
-		ev, ok := <-s.eventCh
-		if !ok {
-			Tools.Debug("dispatcherLoop not found eventCh")
+		var ev Event
+		select {
+		case <-s.closeCh:
 			return
+		case event, ok := <-s.eventCh:
+			if !ok {
+				Tools.Debug("dispatcherLoop not found eventCh")
+				return
+			}
+			ev = event
 		}
 
 		s.mu.RLock()

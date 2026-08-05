@@ -22,21 +22,24 @@ func NewKVStoreWithBackend(backend Backend, opts StoreOptions) *KVStore {
 	kv := &KVStore{
 		backend: backend,
 
-		watchers: make(map[string][]*Watcher),
+		watchers:       make(map[string][]*Watcher),
 		prefixWatchers: make(map[string][]*Watcher),
-		watchersByID: make(map[int64]*Watcher),
+		watchersByID:   make(map[int64]*Watcher),
 
 		keyLease: make(map[string]int64),
-		eventCh: make(chan Event, 1024),
+		eventCh:  make(chan Event, 1024),
+		closeCh:  make(chan struct{}),
 	}
 
 	leaseMgr := NewLeaseManager(kv)
 	kv.leaseMgr = leaseMgr
 
 	if opts.LeaseExpireMode == LeaseExpireLocal {
+		kv.closeWg.Add(1)
 		go leaseMgr.expirationLoop()
 	}
 
+	kv.closeWg.Add(1)
 	go kv.dispatcherLoop()
 
 	return kv
@@ -76,7 +79,10 @@ func (s *KVStore) Put(k string, v []byte, leaseID int64) (Revision, error) {
 	// default:
 	// }
 
-	s.eventCh <- ev
+	select {
+	case s.eventCh <- ev:
+	case <-s.closeCh:
+	}
 
 	// s.notifyWatchers(Event{
 	// 	Type: EventPut,
@@ -102,8 +108,8 @@ func (s *KVStore) putLocked(k string, v []byte) (Revision, Event) {
 
 	versions, _ := s.backend.GetRevisions(k)
 	versions = append(versions, ValueRevision{
-		Rev: rev,
-		Value: value,
+		Rev:     rev,
+		Value:   value,
 		Deleted: false,
 	})
 	s.backend.SetRevisions(k, versions)
@@ -195,7 +201,10 @@ func (s *KVStore) Delete(k string) Revision {
 	rev, ev := s.deleteLocked(k)
 	s.mu.Unlock()
 
-	s.eventCh <- ev
+	select {
+	case s.eventCh <- ev:
+	case <-s.closeCh:
+	}
 
 	return rev
 }
@@ -211,7 +220,7 @@ func (s *KVStore) deleteLocked(k string) (Revision, Event) {
 
 	versions, _ := s.backend.GetRevisions(k)
 	versions = append(versions, ValueRevision{
-		Rev: rev,
+		Rev:     rev,
 		Deleted: true,
 	})
 	s.backend.SetRevisions(k, versions)
@@ -326,10 +335,10 @@ func (s *KVStore) Restore(snapshot []byte) {
 	defer s.mu.Unlock()
 
 	s.backend.ReplaceState(BackendState{
-		Data: dataMap,
+		Data:       dataMap,
 		CurrentRev: snap.CurrentRev,
 		CompactRev: snap.CompactRev,
-		Events: events,
+		Events:     events,
 	})
 	s.keyLease = keylease
 	s.leaseMgr.nextLeaseID = snap.NextLeaseId
@@ -349,7 +358,6 @@ func (s *KVStore) Snapshot() []byte {
 		keylease[k] = leaseID
 	}
 	leases, nextleaseID := s.leaseMgr.snapshot()
-
 
 	newMap := make(map[string][]ValueRevision, len(state.Data))
 
@@ -394,7 +402,7 @@ func (s *KVStore) Snapshot() []byte {
 	})
 
 	currentRev := state.CurrentRev
-	compactRev :=  state.CompactRev
+	compactRev := state.CompactRev
 
 	s.mu.RUnlock()
 
