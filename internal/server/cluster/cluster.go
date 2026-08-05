@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 
 	gogrpc "google.golang.org/grpc"
@@ -31,11 +32,12 @@ type PeerConfig struct {
 
 // 描述“当前进程要启动的这一个节点”
 type NodeConfig struct {
-	ID         int          `json:"id"`
-	PeerAddr   string       `json:"peer_addr"`
-	ClientAddr string       `json:"client_addr"`
-	DataDir    string       `json:"data_dir"` // 当前节点持久化 raft/snapshot 数据的目录
-	Peers      []PeerConfig `json:"peers"`    // 完整集群成员列表，所有节点必须一致
+	ID             int          `json:"id"`
+	PeerAddr       string       `json:"peer_addr"`
+	ClientAddr     string       `json:"client_addr"`
+	DataDir        string       `json:"data_dir"`                  // 当前节点持久化 raft/snapshot 数据的目录
+	StorageBackend string       `json:"storage_backend,omitempty"` // MVCC 后端：空值/memory 使用内存，lindb 使用 Lin-DB。
+	Peers          []PeerConfig `json:"peers"`                     // 完整集群成员列表，所有节点必须一致
 }
 
 // 表示一个已经启动或正在关闭的单节点进程
@@ -91,6 +93,12 @@ func (c NodeConfig) Validate() error {
 
 	if c.DataDir == "" {
 		return fmt.Errorf("data_dir is required")
+	}
+
+	switch c.StorageBackend {
+	case "", "memory", "lindb":
+	default:
+		return fmt.Errorf("unsupported storage_backend %q", c.StorageBackend)
 	}
 
 	if len(c.Peers) == 0 {
@@ -171,7 +179,11 @@ func StartNode(cfg NodeConfig) (*Node, error) {
 	node.raftNode = raft.Make(peers, cfg.ID, ps, applyCh)
 	node.peerHandler.SetRaft(node.raftNode)
 
-	store := mvcc.NewKVStoreWithOptions(mvcc.StoreOptions{LeaseExpireMode: mvcc.LeaseExpireExternal})
+	store, err := newMVCCStore(cfg)
+	if err != nil {
+		_ = node.Close()
+		return nil, err
+	}
 
 	node.kvCore = kvserver.NewServer(cfg.ID, node.raftNode, store, applyCh)
 	clientListener, err := net.Listen("tcp", cfg.ClientAddr)
@@ -189,6 +201,23 @@ func StartNode(cfg NodeConfig) (*Node, error) {
 	Tools.Info("node %d started: peer=%s client=%s data=%s", cfg.ID, cfg.PeerAddr, cfg.ClientAddr, cfg.DataDir)
 	return node, nil
 
+}
+
+func newMVCCStore(cfg NodeConfig) (*mvcc.KVStore, error) {
+	options := mvcc.StoreOptions{LeaseExpireMode: mvcc.LeaseExpireExternal}
+
+	switch cfg.StorageBackend {
+	case "", "memory":
+		return mvcc.NewKVStoreWithOptions(options), nil
+	case "lindb":
+		backend, err := mvcc.OpenLinDBBackend(filepath.Join(cfg.DataDir, "mvcc-lindb"))
+		if err != nil {
+			return nil, fmt.Errorf("open lindb backend: %w", err)
+		}
+		return mvcc.NewKVStoreWithBackend(backend, options), nil
+	default:
+		return nil, fmt.Errorf("unsupported storage_backend %q", cfg.StorageBackend)
+	}
 }
 
 // 统一启动一个 gRPC server 并记录退出原因
@@ -219,6 +248,12 @@ func (n *Node) Close() error {
 
 		if n.peerListener != nil {
 			_ = n.peerListener.Close()
+		}
+
+		if n.kvCore != nil {
+			if err := n.kvCore.Close(); err != nil && n.closeErr == nil {
+				n.closeErr = err
+			}
 		}
 
 		for _, conn := range n.peerConns {

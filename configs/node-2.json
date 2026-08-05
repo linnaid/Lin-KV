@@ -3,6 +3,7 @@
     "peer_addr": "127.0.0.1:8003",
     "client_addr": "127.0.0.1:9003",
     "data_dir": "data/node-2",
+    "storage_backend": "lindb",
     "peers": [
         {
             "id": 0,

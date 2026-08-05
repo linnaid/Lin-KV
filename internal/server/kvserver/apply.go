@@ -11,85 +11,94 @@ import (
 )
 
 func (s *Server) applyLoop() {
+	defer s.closeWg.Done()
 	Tools.Info("APPLY LOOP GOT MSG")
-	for msg := range s.applyCh {
-		// Tools.Info("APPLY INDEX", msg.CommandIndex)
-		if msg.SnapshotValid {
-			s.restoreSnapshot(msg.Snapshot)
-			continue
-		}
+	for {
+		select {
+		case <-s.closeCh:
+			return
+		case msg, ok := <-s.applyCh:
+			if !ok {
+				return
+			}
+			// Tools.Info("APPLY INDEX", msg.CommandIndex)
+			if msg.SnapshotValid {
+				s.restoreSnapshot(msg.Snapshot)
+				continue
+			}
 
-		if !msg.CommandValid {
-			continue
-		}
+			if !msg.CommandValid {
+				continue
+			}
 
-		data := msg.Command
+			data := msg.Command
 
-		var env command.Command
+			var env command.Command
 
-		err := command.Decode(data, &env)
-		if err != nil {
-			Tools.Debug("Decode error in applyLoop.")
-			panic(err)
-		}
+			err := command.Decode(data, &env)
+			if err != nil {
+				Tools.Debug("Decode error in applyLoop.")
+				panic(err)
+			}
 
-		index := change(msg.CommandIndex)
-		clientID := env.ClientID()
-		seq := env.Seq()
+			index := change(msg.CommandIndex)
+			clientID := env.ClientID()
+			seq := env.Seq()
 
-		// Dedup
-		s.mu.Lock()
-		lastSeq := s.clientLastSeq[clientID]
+			// Dedup
+			s.mu.Lock()
+			lastSeq := s.clientLastSeq[clientID]
 
-		if seq < lastSeq {
+			if seq < lastSeq {
+				s.mu.Unlock()
+				continue
+			}
+
+			if seq == lastSeq {
+				result := s.clientLastResult[clientID]
+
+				if ch, ok := s.waitCh[index]; ok {
+					if match(ch, &env) {
+						ch.Result = result
+						close(ch.Notify)
+					}
+					delete(s.waitCh, index)
+				}
+				s.mu.Unlock()
+				continue
+			}
+
 			s.mu.Unlock()
-			continue
-		}
 
-		if seq == lastSeq {
-			result := s.clientLastResult[clientID]
+			result := s.applyCommand(&env)
+			result.Kind = env.Kind
+			result.ClientID = clientID
+			result.Seq = seq
+
+			s.mu.Lock()
+			s.clientLastSeq[clientID] = seq
+			s.clientLastResult[clientID] = result
+			// Tools.Info("lastClientID", cmd.ClientID)
 
 			if ch, ok := s.waitCh[index]; ok {
+
 				if match(ch, &env) {
 					ch.Result = result
 					close(ch.Notify)
 				}
 				delete(s.waitCh, index)
+			} else {
+				// 🔥 关键：缓存结果（防止先 apply 后注册）
+				s.LastResult[index] = result
 			}
 			s.mu.Unlock()
-			continue
-		}
 
-		s.mu.Unlock()
-
-		result := s.applyCommand(&env)
-		result.Kind = env.Kind
-		result.ClientID = clientID
-		result.Seq = seq
-
-		s.mu.Lock()
-		s.clientLastSeq[clientID] = seq
-		s.clientLastResult[clientID] = result
-		// Tools.Info("lastClientID", cmd.ClientID)
-
-		if ch, ok := s.waitCh[index]; ok {
-
-			if match(ch, &env) {
-				ch.Result = result
-				close(ch.Notify)
+			if s.needSnapshot() {
+				snapshot := s.makeSnapshot()
+				s.raft.Snapshot(msg.CommandIndex, snapshot)
 			}
-			delete(s.waitCh, index)
-		} else {
-			// 🔥 关键：缓存结果（防止先 apply 后注册）
-			s.LastResult[index] = result
-		}
-		s.mu.Unlock()
 
-		if s.needSnapshot() {
-			snapshot := s.makeSnapshot()
-			s.raft.Snapshot(msg.CommandIndex, snapshot)
 		}
-
 	}
 
 }
