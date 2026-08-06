@@ -10,6 +10,12 @@ type BackendState struct {
 	CompactRev int64
 }
 
+type AppliedIndexBackend interface {
+	AppliedIndex() int64
+	AppliedTerm()  int64
+	SetApplied(index, term int64)
+}
+
 type Backend interface {
 	CurrentRev() int64
 	SetCurrentRev(rev int64)

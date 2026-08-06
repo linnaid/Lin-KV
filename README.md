@@ -30,6 +30,7 @@
 - **MVCC 存储引擎**
   - 支持 Revision、多版本历史读、Range、Prefix Range
   - 支持基于 Compare/Then/Else 的事务操作
+  - 支持通过 `storage_backend` 在内存 Backend 与 Lin-DB Backend 间切换
 - **Watch 机制**
   - 支持 key / prefix 监听
   - 支持历史事件补发与服务端流式推送
@@ -89,5 +90,5 @@ internal/
 
 - 当前对外访问方式为 gRPC，暂未提供 RESTful HTTP 接口。
 - 当前节点间通信使用普通 gRPC 连接，暂未接入 mTLS。
-- 当前 MVCC 后端以项目内存储抽象和内存 Backend 为主，未接入 BoltDB/RocksDB 等外部嵌入式数据库。
+- 当前示例配置默认使用 Lin-DB 作为 MVCC Backend；该接入仍处于 Phase A，尚未实现 `applied_index` 与 MVCC 写入同 batch 原子提交。
 - Lease 与 Watch 已具备支撑分布式锁、服务注册发现等上层能力的基础机制，但项目当前未单独实现锁服务或服务注册发现模块。

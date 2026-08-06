@@ -210,7 +210,7 @@ func newMVCCStore(cfg NodeConfig) (*mvcc.KVStore, error) {
 	case "", "memory":
 		return mvcc.NewKVStoreWithOptions(options), nil
 	case "lindb":
-		backend, err := mvcc.OpenLinDBBackend(filepath.Join(cfg.DataDir, "mvcc-lindb"))
+				backend, err := mvcc.OpenLinDBBackend(filepath.Join(cfg.DataDir, "mvcc-lindb"))
 		if err != nil {
 			return nil, fmt.Errorf("open lindb backend: %w", err)
 		}

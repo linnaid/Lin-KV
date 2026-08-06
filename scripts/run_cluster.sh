@@ -9,12 +9,27 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="${ROOT_DIR}/bin"
 BIN="${BIN_DIR}/kv-server"
 LOG_DIR="${ROOT_DIR}/data/logs"
+LINDB_ROOT="${LINDB_ROOT:-/home/linnaid/lin-DB/Lin-DB}"
+LINDB_LIB="${LINDB_ROOT}/build/liblindb_core.a"
+GO_TAGS="${GO_TAGS:-lindb}"
 
 mkdir -p "${BIN_DIR}" "${LOG_DIR}"
 
 cd "${ROOT_DIR}"
 
-go build -o "${BIN}" ./cmd/kv-server
+if [[ " ${GO_TAGS} " == *" lindb "* && ! -f "${LINDB_LIB}" ]]; then
+    cat >&2 <<EOF
+Lin-DB library not found: ${LINDB_LIB}
+
+Build it first:
+  cd "$(dirname "${LINDB_ROOT}")"
+  cmake -S Lin-DB -B Lin-DB/build -DLINDB_BUILD_BENCHMARKS=OFF
+  cmake --build Lin-DB/build --target lindb_core -j
+EOF
+    exit 1
+fi
+
+CGO_ENABLED="${CGO_ENABLED:-1}" go build -tags "${GO_TAGS}" -o "${BIN}" ./cmd/kv-server
 
 pids=()
 

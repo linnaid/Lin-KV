@@ -27,6 +27,8 @@ import (
 )
 
 const (
+	metaAppliedIndex = "meta/applied_index"
+	metaAppliedTerm = "meta/applied_term"
 	metaCurrentRev = "meta/current_rev"
 	metaCompactRev = "meta/compact_rev"
 	dataPrefix     = "data/"
